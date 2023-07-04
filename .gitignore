@@ -1,0 +1,7 @@
+.nrepl-port
+.lsp
+.cpcache
+.calva
+.clj-kondo
+.DS_Store
+/scratch
