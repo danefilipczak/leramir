@@ -18,7 +18,10 @@
                            :else :flight))))
 
 (defmethod denominate :default 
-  [whole start path x] {path (tv/->timed-value whole start x)})
+  [whole start path x]
+  (when (keyword? x)
+    (assert (special-keywords x)))
+  {path (tv/->timed-value whole start x)})
 
 (defn graft? [x]
   (and 
@@ -35,26 +38,21 @@
     (r/rational (count (drop-syntax x)) 1)
     r/one))
 
-(defmethod denominate :graft
- [whole start path x] 
-  (denominate whole start path (cons :flight (rest x))))
-
-(defmethod denominate :flight
-  [whole start path x']
+(defn denominate-flight* [whole start path x']
   (let [x (drop-syntax x')
-        divisions (spy (reduce r/+ (map denomination x))) 
+        divisions (reduce r/+ (map denomination x))
         per-value (r// whole divisions)
-        end (r/+ start whole)] 
-    (->> x 
+        end (r/+ start whole)]
+    (->> x
          (interleave (range))
          (partition 2)
          reverse
          (reduce
-          (fn [[i acc additional] [index curr]] 
+          (fn [[i acc additional] [index curr]]
             (let [duration (r/+ (r/* per-value (denomination curr))
                                 (r/* per-value additional))
-                  start' (r/- end 
-                              (r/* per-value 
+                  start' (r/- end
+                              (r/* per-value
                                    (r/+ i (denomination curr))))
                   next-i (r/+ i (denomination curr))]
               (if (= curr :>)
@@ -62,17 +60,27 @@
                  acc
                  (r/+ additional r/one)]
                 [next-i
-                 (merge 
+                 (merge
                   acc
                   (denominate
                    duration
                    start'
                    (conj path index)
-                   curr)) 
+                   curr))
                  r/zero])))
           [r/zero {} r/zero])
          second
          (into {}))))
+
+(defmethod denominate :graft
+ [whole start path x]
+ (merge (denominate whole start path :graft)
+        (denominate-flight* whole start path x)))
+
+(defmethod denominate :flight
+  [whole start path x]
+  (merge (denominate whole start path :flight)
+         (denominate-flight* whole start path x)))
 
 (comment
   (ns-unmap *ns* 'denominate) 
@@ -86,27 +94,33 @@
 
 (defmethod denominate :heap
  [whole start path form]
-  (->> (drop-syntax form) 
-       (map-indexed
-          (fn [i x]
-            (denominate 
-             whole 
-             start 
-             (conj path i)
-             x)))
-       (apply merge)))
+  (merge (denominate whole start path :heap)
+         (->> (drop-syntax form) 
+              (map-indexed
+               (fn [i x]
+                 (denominate 
+                  whole 
+                  start 
+                  (conj path i)
+                  x)))
+              (apply merge))))
 
 (defmethod denominate :chain
   [whole start path form]
-  (->> (drop-syntax form)
-       (map-indexed
-        (fn [i x]
-          (denominate
-           whole
-           (r/+ start (r/* whole (r/rational i 1)))
-           (conj path i)
-           x)))
-       (apply merge)))
+  (merge (denominate 
+          (r/* whole (r/rational (count (drop-syntax form)) 1)) 
+          start 
+          path 
+          :chain)
+         (->> (drop-syntax form)
+              (map-indexed
+               (fn [i x]
+                 (denominate
+                  whole
+                  (r/+ start (r/* whole (r/rational i 1)))
+                  (conj path i)
+                  x)))
+              (apply merge))))
 
 (comment
   (->path->timed-value [:chain 1 2 3 [:stack]])
@@ -143,30 +157,13 @@
   (get-in-flight [[:heap 0 4]] [0 1])
   )
 
-#_(defmethod denominate :chain
-  [whole start path form]
-  (mapv
-   (fn [value]
-     (timed-value
-      whole
-      start
-      (denominate
-       whole
-       start
-       value)))
-   (drop-syntax form)))
-
-#_(defmethod denominate :graft
-  [whole start path form]
-  (denominate whole start (drop-syntax form)))
-
 (defn ->path->timed-value [x]
   (denominate r/one r/zero [] x))
 
 (defn roundtrips? [flight]
   (every?
    true?
-   (for [[path timed-value] (parse flight)]
+   (for [[path timed-value] (->path->timed-value flight)]
      (= (flight-get-in flight path)
         (tv/value timed-value)))))
 
