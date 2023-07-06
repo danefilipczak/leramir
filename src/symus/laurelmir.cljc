@@ -72,58 +72,62 @@
          second
          (into {}))))
 
+(defn update-single-val [m f & args]
+  {:pre [(= 1 (count m))]}
+  (let [[k v] (first m)]
+    {k (apply f v args)}))
+
+(defn register-dependencies [children self]
+  (merge
+   (apply update-single-val self tv/register-deps (keys children))
+   children))
+
 (defmethod denominate :graft
- [whole start path x]
- (merge (denominate whole start path :graft)
-        (denominate-flight* whole start path x)))
+  [whole start path x]
+  (let [children (denominate-flight* whole start path x)
+        self (denominate whole start path :graft)]
+    (register-dependencies children self)))
 
 (defmethod denominate :flight
   [whole start path x]
-  (merge (denominate whole start path :flight)
-         (denominate-flight* whole start path x)))
-
-(comment
-  (ns-unmap *ns* 'denominate) 
-  (->path->timed-value [[:graft 3 4]])
-
-  (->path->timed-value [:flight 1 2])
-
-  [:flight 1 2 3 [:graft :scale 3 1 2 3 4] :> 4 5] ;; should the 4 or the graft as a whole get the extra beat?
-
-  )
+  (let [children (denominate-flight* whole start path x)
+        self (denominate whole start path :self)]
+    (register-dependencies children self)))
 
 (defmethod denominate :heap
  [whole start path form]
-  (merge (denominate whole start path :heap)
-         (->> (drop-syntax form) 
-              (map-indexed
-               (fn [i x]
-                 (denominate 
-                  whole 
-                  start 
-                  (conj path i)
-                  x)))
-              (apply merge))))
+  (let [children (->> (drop-syntax form)
+                      (map-indexed
+                       (fn [i x]
+                         (denominate
+                          whole
+                          start
+                          (conj path i)
+                          x)))
+                      (apply merge))
+        self (denominate whole start path :heap)]
+    (register-dependencies children self)))
 
 (defmethod denominate :chain
   [whole start path form]
-  (merge (denominate 
-          (r/* whole (r/rational (count (drop-syntax form)) 1)) 
-          start 
-          path 
-          :chain)
-         (->> (drop-syntax form)
-              (map-indexed
-               (fn [i x]
-                 (denominate
-                  whole
-                  (r/+ start (r/* whole (r/rational i 1)))
-                  (conj path i)
-                  x)))
-              (apply merge))))
+  (let [children (->> (drop-syntax form)
+                      (map-indexed
+                       (fn [i x]
+                         (denominate
+                          whole
+                          (r/+ start (r/* whole (r/rational i 1)))
+                          (conj path i)
+                          x)))
+                      (apply merge)) 
+        self (denominate
+              (r/* whole (r/rational (count (drop-syntax form)) 1))
+              start
+              path
+              :chain)] 
+    (register-dependencies children self)))
 
 (comment
-  (->path->timed-value [:chain 1 2 3 [:stack]])
+  (->path->timed-value [:chain 1 2 3])
 
   [:chain :backtrack :default :love 1 2 3]
 
@@ -166,6 +170,38 @@
    (for [[path timed-value] (->path->timed-value flight)]
      (= (flight-get-in flight path)
         (tv/value timed-value)))))
+
+;; todo tests for roundtrips?
+
+(defn detect-circular-dependency? [p->tv] ;; todo rewrite me : (
+  (let [visited (atom #{})
+        in-progress (atom #{})
+        cycle (atom false)]
+
+    (defn dfs [node]
+      (swap! in-progress conj node)
+      (doseq [dep (tv/->deps (p->tv node))]
+        (if (contains? @in-progress dep)
+          (do (reset! cycle true)
+              (throw (Exception. (str "Circular dependency found: " node " -> " dep))))
+          (when (not (contains? @visited dep))
+            (dfs dep))))
+      (swap! in-progress disj node)
+      (swap! visited conj node))
+
+    (doseq [node (keys p->tv)]
+      (when (not (contains? @visited node))
+        (dfs node)))
+
+    @cycle))
+
+(comment
+
+
+
+  (detect-circular-dependency?
+   (->path->timed-value [:heap 1 2 3]))
+  )
 
 
 (comment 

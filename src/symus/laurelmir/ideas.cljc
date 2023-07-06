@@ -28,28 +28,6 @@
 
   ; Output: 1
 
-(defn detect-circular-dependency? [dependencies]
-  (let [visited (atom #{})
-        in-progress (atom #{})
-        cycle (atom false)]
-
-    (defn dfs [node]
-      (swap! in-progress conj node)
-      (doseq [dep (dependencies node)]
-        (if (contains? @in-progress dep)
-          (do (reset! cycle true)
-              (throw (Exception. (str "Circular dependency found: " node " -> " dep))))
-          (when (not (contains? @visited dep))
-            (dfs dep))))
-      (swap! in-progress disj node)
-      (swap! visited conj node))
-
-    (doseq [node (keys dependencies)]
-      (when (not (contains? @visited node))
-        (dfs node)))
-
-    @cycle))
-
 (def dependencies 
   {:a #{:b}
    :b #{:c}
