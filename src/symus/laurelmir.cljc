@@ -8,14 +8,14 @@
   (println x)
   x)
 
-(def special-keywords #{:heap :graft :scale :chain :flight})
+(def special-keywords #{:heap :graft :scale :chain :era})
 
 (defmulti denominate (fn [_whole _start _path x]
                        (cond 
                          (sequential? x)
                          (cond
                            (contains? (methods denominate) (first x)) (first x) 
-                           :else :flight))))
+                           :else :era))))
 
 (defmethod denominate :default 
   [whole start path x]
@@ -38,7 +38,7 @@
     (r/rational (count (drop-syntax x)) 1)
     r/one))
 
-(defn denominate-flight* [whole start path x']
+(defn denominate-era* [whole start path x']
   (let [x (drop-syntax x')
         divisions (reduce r/+ (map denomination x))
         per-value (r// whole divisions)
@@ -84,13 +84,13 @@
 
 (defmethod denominate :graft
   [whole start path x]
-  (let [children (denominate-flight* whole start path x)
+  (let [children (denominate-era* whole start path x)
         self (denominate whole start path :graft)]
     (register-dependencies children self)))
 
-(defmethod denominate :flight
+(defmethod denominate :era
   [whole start path x]
-  (let [children (denominate-flight* whole start path x)
+  (let [children (denominate-era* whole start path x)
         self (denominate whole start path :self)]
     (register-dependencies children self)))
 
@@ -134,12 +134,12 @@
 
   )
 
-(defn flight-get [flight index]
-  (nth (drop-syntax flight) index))
+(defn era-get [era index]
+  (nth (drop-syntax era) index))
 
-(defn flight-get-in
+(defn era-get-in
   [p ks]
-  (reduce flight-get p ks))
+  (reduce era-get p ks))
 
 (defn path? [x]
   (and (vector? x)
@@ -158,17 +158,17 @@
 
   (get-in [1 3 12 [1 [1 2 3] 2]] [3 1 2]) 
 
-  (get-in-flight [[:heap 0 4]] [0 1])
+  (get-in-era [[:heap 0 4]] [0 1])
   )
 
 (defn ->path->timed-value [x]
   (denominate r/one r/zero [] x))
 
-(defn roundtrips? [flight]
+(defn roundtrips? [era]
   (every?
    true?
-   (for [[path timed-value] (->path->timed-value flight)]
-     (= (flight-get-in flight path)
+   (for [[path timed-value] (->path->timed-value era)]
+     (= (era-get-in era path)
         (tv/value timed-value)))))
 
 ;; todo tests for roundtrips?

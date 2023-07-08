@@ -70,21 +70,20 @@
 
   )
 
-(comment 
+(comment
 
 
-  (def modifiers #{
-                   :shift ;; modify by a rational value 
+  (def modifiers #{:shift ;; modify by a rational value 
                    :offset ;; modify by a numeric value
                    })
-  
+
   (spec/def ::dependancies (spec/map-of keyword? keyword?))
-  
-  (spec/def ::props (spec/keys 
-                     :req [::now] 
+
+  (spec/def ::props (spec/keys
+                     :req [::now]
                      :opt [::dependancies]
-                     :opt-un [::voice])) 
-  
+                     :opt-un [::voice]))
+
   {:cello :flute
    :flute :bass
    :bass :cello}
@@ -92,12 +91,12 @@
 
   (defn now [props]
     (:now props))
-  
-  [:flight [1 2 3 (fn [props] 
-                    (grid-get-time :my-grid (now props)))]]
+
+  [:era [1 2 3 (fn [props]
+                  (grid-get-time :my-grid (now props)))]]
 
 
   ;; the whole point of the markup language is that it's static, not moving... 
   ;; once we introduce signals, we're in the realm of FRP, which is great, but at that point we probably need a macro
-  
+
   )

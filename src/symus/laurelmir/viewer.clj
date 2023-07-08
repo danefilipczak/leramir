@@ -57,8 +57,8 @@
       attrs
       [to 0] [to height]]]))
 
-(defn vizualize-flight [flight]
-  (let [p->tv (l/->path->timed-value flight)
+(defn vizualize-era [era]
+  (let [p->tv (l/->path->timed-value era)
         width 500
         per-rung 10
         rung-padding 5
@@ -99,18 +99,18 @@
        (fn [[a b]]))
      
      (now-at :cello)
-     
+
      5] 
 
     (io/render-svg
-     (vizualize-flight
+     (vizualize-era
       [:chain
        [1 2 3 [:graft [:heap 4 5] 5] :> 6 1]
        [1 2 3 [:graft [:heap [4 5] 1] 5] 6 :>]
        [1 2 3 [:graft [:heap 4 5] 5] 6 :>]])
      "scratch/svgs/architecture.svg")
     
-    (vizualize-flight
+    (vizualize-era
      [:chain
       [[1 2 3 [:graft [:heap 4 5] 5] :> 6 1]]
       [1 2 3 [:graft [:heap 4 5] 5] 6 :>]
