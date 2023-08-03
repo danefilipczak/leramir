@@ -2,7 +2,8 @@
   (:require [symus.laurelmir.rational :as r]
             [symus.laurelmir.types.timed-value :as tv]
             [clojure.spec.alpha :as spec]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [clojure.core.match :refer [match]]))
 
 (defn spy [x]
   (println x)
@@ -29,9 +30,35 @@
    (sequential? x)
    (= (first x) :graft)))
 
+(defn parse-form [form]
+  (match form
+    [tag :guard keyword?
+     attrs :guard map?
+     & children]
+    [tag attrs children]
+    
+    [tag :guard keyword?
+     & children]
+    [tag nil children]
+    
+    :else
+    [:era nil form]))
+
+(defn tag [form]
+  (first (parse-form form)))
+
+(defn attrs [form]
+  (second (parse-form form)))
+
 (defn drop-syntax [form]
-  ;; this will need to become smarter as we offer compound syntax
-  (drop-while keyword? form))
+  ;; todo rename me
+  (last (parse-form form)))
+
+(comment
+  (tag [:era {}])
+  (attrs [:era 1 2 3 4 5])
+  (drop-syntax [:era 1 2 3 4 5])
+  )
 
 (defn denomination [x] 
   ;; how many divisions am I worth?
