@@ -1,6 +1,5 @@
 (ns symus.laurelmir.types.timed-value
-  (:require [symus.laurelmir.rational :as r]
-            [symus.laurelmir :as l]))
+  (:require [symus.laurelmir.rational :as r]))
 
 (defrecord TimedValue [duration start value])
 

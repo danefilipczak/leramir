@@ -11,7 +11,8 @@
 (def special-keywords #{:heap :graft :scale :chain :era})
 
 (defmulti denominate (fn [_whole _start _path x]
-                       (cond 
+                       (cond
+                         (set? x) ::set
                          (sequential? x)
                          (cond
                            (contains? (methods denominate) (first x)) (first x) 
@@ -20,7 +21,7 @@
 (defmethod denominate :default 
   [whole start path x]
   (when (keyword? x)
-    (assert (special-keywords x)))
+    (assert (special-keywords x) (str "not special " x)))
   {path (tv/->timed-value whole start x)})
 
 (defn graft? [x]
@@ -82,6 +83,13 @@
    (apply update-single-val self tv/register-deps (keys children))
    children))
 
+(defmethod denominate ::set
+  [whole start path x]
+  (apply 
+   merge
+   (for [[i v] (zipmap (range) x)]
+     (denominate whole start (conj path i) v))))
+
 (defmethod denominate :graft
   [whole start path x]
   (let [children (denominate-era* whole start path x)
@@ -91,7 +99,7 @@
 (defmethod denominate :era
   [whole start path x]
   (let [children (denominate-era* whole start path x)
-        self (denominate whole start path :self)]
+        self (denominate whole start path :era)]
     (register-dependencies children self)))
 
 (defmethod denominate :heap

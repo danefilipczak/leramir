@@ -30,32 +30,53 @@
         ] 
     (concat (for [[i nn] (partition 2 (interleave (range) stave))]
               [:rect
-               {:stroke :gainsboro :stroke-width 0.5 :fill (if (contains? 
-                                                                #{0 2 4 5 7 9 11} 
-                                                                (int (mod nn 12))) 
-                                                             :white
-                                                             :whitesmoke)}
-               [0 (nn->height nn)] [width height-per-stave]])
+               {:stroke :gainsboro
+                :stroke-width 0.5
+                :fill (if (contains?
+                           #{0 2 4 5 7 9 11}
+                           (int (mod nn 12)))
+                        :white
+                        :whitesmoke)
+                :x 0
+                :y (nn->height nn)
+                :width width
+                :height height-per-stave}])
             (for [tv (vals p->tv)
                   :let [nn (maybe-discreet (tv/value tv))]
                   :when nn]
               [:rect
-               {:stroke :gainsboro :stroke-width 0.5 :fill :black}
-               [(rescale-tv-time (tv/start tv)) (nn->height nn)] 
-               [(rescale-tv-time (tv/duration tv)) height-per-stave]]))))
+               {:stroke :gainsboro 
+                :stroke-width 0.5 
+                :fill :black
+                :x (rescale-tv-time (tv/start tv))
+                :y (nn->height nn)
+                :width (rescale-tv-time (tv/duration tv))
+                :height height-per-stave}]))))
 
 (defn bracket [from to height]
   (let [attrs {:stroke :black}]
     [:g
      [:line 
-      attrs 
-      [from 0] [to 0]]
+      (merge 
+       attrs
+       {:x1 from
+        :y1 0
+        :x2 to
+        :y2 0})]
      [:line 
-      attrs 
-      [from 0] [from height]]
+      (merge
+       attrs
+       {:x1 from
+        :y1 0
+        :x2 from
+        :y2 height})]
      [:line
-      attrs
-      [to 0] [to height]]]))
+      (merge
+       attrs
+       {:x1 to
+        :y1 0
+        :x2 to
+        :y2 height})]]))
 
 (defn vizualize-era [era]
   (let [p->tv (l/->path->timed-value era)
@@ -71,7 +92,7 @@
         margin-height (* rung-total (inc max-count))
         total-height (+ margin-height piano-roll-height)
         ]
-    [:dali/page
+    [:svg
      {:width width
       :height total-height} 
      (for [[path tv] metas]
@@ -89,16 +110,64 @@
       (piano-roll width piano-roll-height p->tv)]]))
 
   (comment
+    ;; tonality and qualia - tonality is a more specific version of 'qualia'
+    
     [1 
      2 
      3 
 
-     (plug 
-      [[:plugs/now-at :cello]
-       [:plugs/get-path [1 2 3]]] 
-       (fn [[a b]]))
+     (sym 
+      [[:sym/now-at :cello]
+       [:sym/era-get [1 2 3]]
+       [:sym/slice :cello] ;; returns exactly what's happening during the time this route is active
+       ]
+      ;; constructs and immediatley returns the dependencies. 
+      ;; in order to avoid evaluating circular dependencies, does not immediatley calculate values.
+       (fn [[a b]]
+         (= a b )
+         ))
      
-     (now-at :cello)
+     [(stream [:sym/era-get [1 2 3]])
+      ;; or
+      (stream (get-input :keyboard-manual))
+      ;; or
+      (stream [1 2 3])
+
+      ;; the takeaway: many things can be cast to streams.
+      ;; streams have children that are functions, which transform in real time the values appearing in the streams. 
+      ;; streams abstract over 'start' and 'end' events in order to provide a similar interface to eras. 
+
+      ;; 
+      
+      (sym
+       [[:sym/now-at :cello]
+        [:sym/era-get [1 2 3]]
+        [:sym/slice :cello] ;; returns exactly what's happening during the time this route is active
+        ]
+            ;; constructs and immediatley returns the dependencies. 
+            ;; in order to avoid evaluating circular dependencies, does not immediatley calculate values.
+       (fn [[a b]]
+         (fn [e]
+           #{:many :notes} ;; note off is abstracted over  
+           )))
+      
+      (fn [e] 
+        #{:many :notes} ;; note off is abstracted over  
+        )]
+     
+     ;; i see how values coming in could be used to set state, 
+     ;; which means that more 'static' subscriptions could depend on them
+
+     ;; what I don't see is how incoming values could be used more like an instrument with effects applied.
+     ;; it seems that we need an additional class of 'thing', a live input channel
+
+     ;; is a live 'stream' sufficiently different from a data subscription?
+     ;; data sub - known time/events, potentially unknown / stateful data
+     ;; live stream - unknown time/events, known ranges where subs are applicable.
+     
+     ;; incoming api - note name, all currently active notes, any active subs
+     
+     
 
      5] 
 
@@ -125,5 +194,6 @@
 
     ( l/->path->timed-value )
 
-    (number? 1/3) 
+    
+
     )

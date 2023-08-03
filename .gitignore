@@ -5,3 +5,5 @@
 .clj-kondo
 .DS_Store
 /scratch
+.clerk
+/src/symus/laurelmir/notebooks
