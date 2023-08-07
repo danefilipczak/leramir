@@ -3,7 +3,8 @@
             [symus.laurelmir.types.timed-value :as tv]
             [clojure.spec.alpha :as spec]
             [clojure.spec.alpha :as s]
-            [clojure.core.match :refer [match]]))
+            [clojure.core.match :refer [match]]
+            [hyperfiddle.rcf :refer [tests]]))
 
 (defn spy [x]
   (println x)
@@ -50,24 +51,36 @@
 (defn attrs [form]
   (second (parse-form form)))
 
-(defn drop-syntax [form]
+(defn children [form]
   ;; todo rename me
   (last (parse-form form)))
 
-(comment
-  (tag [:era {}])
-  (attrs [:era 1 2 3 4 5])
-  (drop-syntax [:era 1 2 3 4 5])
-  )
+(tests
+ ;; the leading keyword is a tag
+ (tag [:era {}]) := :era
+
+ ;; an empty tag is an anonymous era 
+ (tag [1 2 3]) := :era 
+ 
+ ;; at the second index lies an optional attrs map
+ (attrs [:era {:color :green}]) := {:color :green}
+
+ ;; you must have a tag to use attrs, they don't work for anonymous eras
+ (attrs [{:color :green}]) := nil
+
+ ;; in an anonymous era, everything is a child
+ (children [{:color :green}]) := [{:color :green}] 
+ 
+ (children [:era 1 2 3 4 5]) := [1 2 3 4 5])
 
 (defn denomination [x] 
   ;; how many divisions am I worth?
   (if (graft? x)
-    (r/rational (count (drop-syntax x)) 1)
+    (r/rational (count (children x)) 1)
     r/one))
 
 (defn denominate-era* [whole start path x']
-  (let [x (drop-syntax x')
+  (let [x (children x')
         divisions (reduce r/+ (map denomination x))
         per-value (r// whole divisions)
         end (r/+ start whole)]
@@ -105,10 +118,10 @@
   (let [[k v] (first m)]
     {k (apply f v args)}))
 
-(defn register-dependencies [children self]
+(defn register-dependencies [descendents self]
   (merge
-   (apply update-single-val self tv/register-deps (keys children))
-   children))
+   (apply update-single-val self tv/register-deps (keys descendents))
+   descendents))
 
 (defmethod denominate ::set
   [whole start path x]
@@ -119,19 +132,19 @@
 
 (defmethod denominate :graft
   [whole start path x]
-  (let [children (denominate-era* whole start path x)
+  (let [descendents (denominate-era* whole start path x)
         self (denominate whole start path :graft)]
-    (register-dependencies children self)))
+    (register-dependencies descendents self)))
 
 (defmethod denominate :era
   [whole start path x]
-  (let [children (denominate-era* whole start path x)
+  (let [descendents (denominate-era* whole start path x)
         self (denominate whole start path :era)]
-    (register-dependencies children self)))
+    (register-dependencies descendents self)))
 
 (defmethod denominate :heap
  [whole start path form]
-  (let [children (->> (drop-syntax form)
+  (let [descendents (->> (children form)
                       (map-indexed
                        (fn [i x]
                          (denominate
@@ -141,11 +154,11 @@
                           x)))
                       (apply merge))
         self (denominate whole start path :heap)]
-    (register-dependencies children self)))
+    (register-dependencies descendents self)))
 
 (defmethod denominate :chain
   [whole start path form]
-  (let [children (->> (drop-syntax form)
+  (let [descendents (->> (children form)
                       (map-indexed
                        (fn [i x]
                          (denominate
@@ -155,11 +168,11 @@
                           x)))
                       (apply merge)) 
         self (denominate
-              (r/* whole (r/rational (count (drop-syntax form)) 1))
+              (r/* whole (r/rational (count (children form)) 1))
               start
               path
               :chain)] 
-    (register-dependencies children self)))
+    (register-dependencies descendents self)))
 
 (comment
   (->path->timed-value [:chain 1 2 3])
@@ -170,7 +183,7 @@
   )
 
 (defn era-get [era index]
-  (nth (drop-syntax era) index))
+  (nth (children era) index))
 
 (defn era-get-in
   [p ks]
