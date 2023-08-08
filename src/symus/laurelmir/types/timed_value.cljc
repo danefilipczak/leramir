@@ -1,12 +1,12 @@
 (ns symus.laurelmir.types.timed-value
   (:require [symus.laurelmir.rational :as r]))
 
-(defrecord TimedValue [duration start value])
+(defrecord TimedValue [duration start attrs value])
 
-(defn ->timed-value [duration start value]
+(defn ->timed-value [duration start attrs value]
   {:pre [(and (r/rational? start) 
               (r/rational? duration))]}
-  (assoc (->TimedValue duration start value) :deps #{}))
+  (assoc (->TimedValue duration start attrs value) :deps #{}))
 
 (defn timed-value? [x]
   (= TimedValue (type x)))
@@ -33,3 +33,6 @@
 
 (defn ->deps [tv]
   (:deps tv))
+
+(defn attrs [tv]
+  (:attrs tv))

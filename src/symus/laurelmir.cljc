@@ -1,18 +1,51 @@
 (ns symus.laurelmir
-  (:require [symus.laurelmir.rational :as r]
-            [symus.laurelmir.types.timed-value :as tv]
+  (:refer-clojure :exclude [ancestors])
+  (:require [clojure.core.match :refer [match]]
+            [clojure.set]
             [clojure.spec.alpha :as spec]
-            [clojure.spec.alpha :as s]
-            [clojure.core.match :refer [match]]
-            [hyperfiddle.rcf :refer [tests]]))
+            [hyperfiddle.rcf :refer [tests]]
+            [symus.laurelmir.rational :as r]
+            [symus.laurelmir.types.timed-value :as tv]))
 
 (defn spy [x]
   (println x)
   x)
 
-(def special-keywords #{:heap :graft :scale :chain :era})
+(def special-keywords #{:heap :graft :chain :era})
 
-(defmulti denominate (fn [_whole _start _path x]
+;; make attrs inheritable - keep in attrs metadata a map of the attr and the path from which it is descended
+;; update parser to include scale, update viewer to include color attrs
+(def uninheritable-attributes #{:scale})
+
+(defn merge-attrs [mine ancestors path]
+  (with-meta 
+    (merge 
+     (select-keys
+      ancestors
+      (clojure.set/difference
+       (set (keys ancestors))
+       uninheritable-attributes)) 
+     mine)
+    (merge (meta ancestors)
+           (zipmap (keys mine) (repeat path)))))
+
+(tests
+ (def x (merge-attrs 
+         {:color :green} 
+         (with-meta {:color :red} {:color []}) 
+         [1]))
+ x := {:color :green}
+ (meta x) := {:color [1]}
+ 
+ (merge-attrs
+  {:color :blue}
+  {(first uninheritable-attributes) :2}
+  [])
+ := 
+ {:color :blue}
+ )
+
+(defmulti denominate (fn [_whole _start _path attrs x]
                        (cond
                          (set? x) ::set
                          (sequential? x)
@@ -21,10 +54,10 @@
                            :else :era))))
 
 (defmethod denominate :default 
-  [whole start path x]
+  [whole start path attrs x]
   (when (keyword? x)
     (assert (special-keywords x) (str "not special " x)))
-  {path (tv/->timed-value whole start x)})
+  {path (tv/->timed-value whole start attrs x)})
 
 (defn graft? [x]
   (and 
@@ -70,7 +103,7 @@
 
  ;; in an anonymous era, everything is a child
  (children [{:color :green}]) := [{:color :green}] 
- 
+
  (children [:era 1 2 3 4 5]) := [1 2 3 4 5])
 
 (defn denomination [x] 
@@ -79,7 +112,7 @@
     (r/rational (count (children x)) 1)
     r/one))
 
-(defn denominate-era* [whole start path x']
+(defn denominate-era* [whole start path attrs x']
   (let [x (children x')
         divisions (reduce r/+ (map denomination x))
         per-value (r// whole divisions)
@@ -107,6 +140,10 @@
                    duration
                    start'
                    (conj path index)
+                   (merge-attrs 
+                    (attrs curr)
+                    attrs
+                    path)
                    curr))
                  r/zero])))
           [r/zero {} r/zero])
@@ -124,53 +161,60 @@
    descendents))
 
 (defmethod denominate ::set
-  [whole start path x]
+  [whole start path attrs x]
   (apply 
    merge
    (for [[i v] (zipmap (range) x)]
-     (denominate whole start (conj path i) v))))
+     (denominate whole start (conj path i) attrs v))))
 
 (defmethod denominate :graft
-  [whole start path x]
-  (let [descendents (denominate-era* whole start path x)
-        self (denominate whole start path :graft)]
+  [whole start path ancestor-attrs x]
+  (let [attrs (merge-attrs (attrs x) ancestor-attrs path)
+        descendents (denominate-era* whole start path attrs x)
+        self (denominate whole start path attrs :graft)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :era
-  [whole start path x]
-  (let [descendents (denominate-era* whole start path x)
-        self (denominate whole start path :era)]
+  [whole start path ancestor-attrs x]
+  (let [attrs (merge-attrs (attrs x) ancestor-attrs path)
+        descendents (denominate-era* whole start path attrs x)
+        self (denominate whole start path attrs :era)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :heap
- [whole start path form]
-  (let [descendents (->> (children form)
+ [whole start path ancestor-attrs form]
+  (let [attrs (merge-attrs (attrs form) ancestor-attrs path)
+        descendents (->> (children form)
                       (map-indexed
                        (fn [i x]
                          (denominate
                           whole
                           start
                           (conj path i)
+                          attrs
                           x)))
                       (apply merge))
-        self (denominate whole start path :heap)]
+        self (denominate whole start path attrs :heap)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :chain
-  [whole start path form]
-  (let [descendents (->> (children form)
+  [whole start path ancestor-attrs form]
+  (let [attrs (merge-attrs (attrs form) ancestor-attrs path)
+        descendents (->> (children form)
                       (map-indexed
                        (fn [i x]
                          (denominate
                           whole
                           (r/+ start (r/* whole (r/rational i 1)))
                           (conj path i)
+                          attrs
                           x)))
                       (apply merge)) 
         self (denominate
               (r/* whole (r/rational (count (children form)) 1))
               start
               path
+              attrs
               :chain)] 
     (register-dependencies descendents self)))
 
@@ -210,7 +254,16 @@
   )
 
 (defn ->path->timed-value [x]
-  (denominate r/one r/zero [] x))
+  (denominate r/one r/zero [] {} x))
+
+(comment 
+  
+  (->path->timed-value 
+   [:chain
+    [1 2 3 [:graft [:heap 4 5] 5] :> 6 1]
+    [1 2 3 [:graft [:heap [4 5] 1] 5] 6 :>]
+    [1 2 3 [:graft [:heap 4 5] 5] 6 :>]])
+  )
 
 (defn roundtrips? [era]
   (every?

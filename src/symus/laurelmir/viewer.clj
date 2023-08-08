@@ -42,12 +42,13 @@
                 :width width
                 :height height-per-stave}])
             (for [tv (vals p->tv)
-                  :let [nn (maybe-discreet (tv/value tv))]
+                  :let [nn (maybe-discreet (tv/value tv))
+                        color (:color (tv/attrs tv))]
                   :when nn]
               [:rect
                {:stroke :gainsboro 
                 :stroke-width 0.5 
-                :fill :black
+                :fill (or color :black)
                 :x (rescale-tv-time (tv/start tv))
                 :y (nn->height nn)
                 :width (rescale-tv-time (tv/duration tv))
