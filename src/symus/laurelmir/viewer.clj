@@ -79,6 +79,9 @@
         :x2 to
         :y2 height})]]))
 
+(defn translate [x y & children]
+  (into [:g {:transform (str "translate(" x " " y ")")}] children))
+
 (defn vizualize-era [era]
   (let [p->tv (l/->path->timed-value era)
         width 500
@@ -88,27 +91,26 @@
         piano-roll-height 300
         metas (into {} (filter (fn [[path tv]] (keyword? (tv/value tv))) p->tv)) ;; todo -> rewrite with specter
         max-count (apply max (map count (keys metas)))
-        last-end (last (sort (map (comp r/realize tv/end) (vals p->tv)))) 
+        last-end (last (sort (map (comp r/realize tv/end) (vals p->tv))))
         rescale-tv-time (fn [tv-time] (float (utils.math/map-range (r/realize tv-time) 0 last-end 0 width)))
         margin-height (* rung-total (inc max-count))
-        total-height (+ margin-height piano-roll-height)
-        ]
+        total-height (+ margin-height piano-roll-height)]
     [:svg
      {:width width
-      :height total-height} 
+      :height total-height}
      (for [[path tv] metas]
-       [:g {:transform [:translate [0 (* rung-total (count path))]]}
-        [:text {:dominant-baseline :hanging 
-                :x (rescale-tv-time (tv/start tv)) 
-                :font-family :helvetica
-                :font-size 8
-                :y 0} 
-         (name (tv/value tv))]
-        (bracket (rescale-tv-time (tv/start tv)) 
-                 (rescale-tv-time (tv/end tv)) 
-                 per-rung)])
-     [:g {:transform [:translate [0 margin-height]]}
-      (piano-roll width piano-roll-height p->tv)]]))
+       (translate 0 (* rung-total (count path))
+                  [:text {:dominant-baseline :hanging
+                          :x (rescale-tv-time (tv/start tv))
+                          :font-family :helvetica
+                          :font-size 8
+                          :y 0}
+                   (name (tv/value tv))]
+                  (bracket (rescale-tv-time (tv/start tv))
+                           (rescale-tv-time (tv/end tv))
+                           per-rung)))
+     (translate 0 margin-height
+                (piano-roll width piano-roll-height p->tv))]))
 
   (comment
     ;; tonality and qualia - tonality is a more specific version of 'qualia'

@@ -106,6 +106,14 @@
 
  (children [:era 1 2 3 4 5]) := [1 2 3 4 5])
 
+(defn scale [whole attrs]
+  (if-let [scale (:scale attrs)]
+    (do (assert (r/rational? scale))
+        (assert (r/pos? scale))
+        (assert (r/rational? whole))
+        (r/* whole scale))
+    whole))
+
 (defn denomination [x] 
   ;; how many divisions am I worth?
   (if (graft? x)
@@ -168,22 +176,25 @@
      (denominate whole start (conj path i) attrs v))))
 
 (defmethod denominate :graft
-  [whole start path ancestor-attrs x]
+  [whole' start path ancestor-attrs x]
   (let [attrs (merge-attrs (attrs x) ancestor-attrs path)
+        whole (scale whole' attrs)
         descendents (denominate-era* whole start path attrs x)
         self (denominate whole start path attrs :graft)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :era
-  [whole start path ancestor-attrs x]
+  [whole' start path ancestor-attrs x]
   (let [attrs (merge-attrs (attrs x) ancestor-attrs path)
+        whole (scale whole' attrs)
         descendents (denominate-era* whole start path attrs x)
         self (denominate whole start path attrs :era)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :heap
- [whole start path ancestor-attrs form]
+ [whole' start path ancestor-attrs form]
   (let [attrs (merge-attrs (attrs form) ancestor-attrs path)
+        whole (scale whole' attrs)
         descendents (->> (children form)
                       (map-indexed
                        (fn [i x]
@@ -198,18 +209,19 @@
     (register-dependencies descendents self)))
 
 (defmethod denominate :chain
-  [whole start path ancestor-attrs form]
+  [whole' start path ancestor-attrs form]
   (let [attrs (merge-attrs (attrs form) ancestor-attrs path)
+        whole (scale whole' attrs)
         descendents (->> (children form)
-                      (map-indexed
-                       (fn [i x]
-                         (denominate
-                          whole
-                          (r/+ start (r/* whole (r/rational i 1)))
-                          (conj path i)
-                          attrs
-                          x)))
-                      (apply merge)) 
+                         (map-indexed
+                          (fn [i x]
+                            (denominate
+                             whole
+                             (r/+ start (r/* whole (r/rational i 1)))
+                             (conj path i)
+                             attrs
+                             x)))
+                         (apply merge)) 
         self (denominate
               (r/* whole (r/rational (count (children form)) 1))
               start

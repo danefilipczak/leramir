@@ -1,5 +1,7 @@
 (ns symus.laurelmir.rational
-  (:refer-clojure :exclude [rational? numerator denominator + - * / *' +' - -']))
+  (:refer-clojure :exclude [rational? numerator denominator + - * / *' +' - -' pos? neg? zero?])
+  (:require [hyperfiddle.rcf :refer [tests]]
+            [symus.laurelmir.rational :as r]))
 
 (def sum clojure.core/+)
 (def product clojure.core/*)
@@ -40,7 +42,7 @@
   (rational (denominator rat) (numerator rat)))
 
 (defn greatest-common-divisor [a b]
-  (if (zero? b)
+  (if (clojure.core/zero? b)
     a
     (recur b (mod a b))))
 
@@ -90,3 +92,34 @@
 
 (def one (rational 1 1))
 (def zero (rational 0 1))
+
+(defn zero? [r]
+  (clojure.core/zero? (numerator r)))
+
+(defn ^:private neg?* [r]
+  (not= 
+   (clojure.core/neg? (numerator r))
+   (clojure.core/neg? (denominator r))))
+
+(def ^:private pos?* (complement neg?*))
+
+(defn neg? [r]
+  (if (zero? r)
+    false
+    (neg?* r)))
+
+(defn pos? [r]
+  (if (zero? r)
+    false
+    (pos?* r)))
+
+(tests
+ (neg? one) := false
+ (neg? zero) := false
+ (neg? (rational 1 -2)) := true 
+
+ (zero? zero) := true
+ (pos? zero) := false
+ (neg? zero) := false
+ 
+ )
