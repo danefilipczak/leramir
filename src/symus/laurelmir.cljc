@@ -15,7 +15,7 @@
 
 ;; make attrs inheritable - keep in attrs metadata a map of the attr and the path from which it is descended
 ;; update parser to include scale, update viewer to include color attrs
-(def uninheritable-attributes #{:scale})
+(def uninheritable-attributes #{:scale :shift})
 
 (defn merge-attrs [mine ancestors path]
   (with-meta 
@@ -114,6 +114,13 @@
         (r/* whole scale))
     whole))
 
+(defn shift [whole start attrs]
+  (if-let [shift (:shift attrs)]
+    (do (assert (r/rational? start)) 
+        (assert (r/rational? shift))
+        (r/+ start (r/* whole shift)))
+    start))
+
 (defn denomination [x] 
   ;; how many divisions am I worth?
   (if (graft? x)
@@ -176,25 +183,28 @@
      (denominate whole start (conj path i) attrs v))))
 
 (defmethod denominate :graft
-  [whole' start path ancestor-attrs x]
+  [whole' start' path ancestor-attrs x]
   (let [attrs (merge-attrs (attrs x) ancestor-attrs path)
         whole (scale whole' attrs)
+        start (shift whole start' attrs)
         descendents (denominate-era* whole start path attrs x)
         self (denominate whole start path attrs :graft)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :era
-  [whole' start path ancestor-attrs x]
+  [whole' start' path ancestor-attrs x]
   (let [attrs (merge-attrs (attrs x) ancestor-attrs path)
         whole (scale whole' attrs)
+        start (shift whole start' attrs)
         descendents (denominate-era* whole start path attrs x)
         self (denominate whole start path attrs :era)]
     (register-dependencies descendents self)))
 
 (defmethod denominate :heap
- [whole' start path ancestor-attrs form]
+ [whole' start' path ancestor-attrs form]
   (let [attrs (merge-attrs (attrs form) ancestor-attrs path)
         whole (scale whole' attrs)
+        start (shift whole start' attrs)
         descendents (->> (children form)
                       (map-indexed
                        (fn [i x]
@@ -209,9 +219,10 @@
     (register-dependencies descendents self)))
 
 (defmethod denominate :chain
-  [whole' start path ancestor-attrs form]
+  [whole' start' path ancestor-attrs form]
   (let [attrs (merge-attrs (attrs form) ancestor-attrs path)
         whole (scale whole' attrs)
+        start (shift whole start' attrs)
         descendents (->> (children form)
                          (map-indexed
                           (fn [i x]
