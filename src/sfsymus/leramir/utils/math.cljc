@@ -1,4 +1,4 @@
-(ns symus.laurelmir.utils.math)
+(ns sfsymus.leramir.utils.math)
 
 (defn map-range [value in-min in-max out-min out-max]
   (let [in-range (- in-max in-min)

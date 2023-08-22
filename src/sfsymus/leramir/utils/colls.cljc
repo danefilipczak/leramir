@@ -1,4 +1,4 @@
-(ns symus.laurelmir.utils.colls)
+(ns sfsymus.leramir.utils.colls)
 
 (defn force-set [x]
   (cond 

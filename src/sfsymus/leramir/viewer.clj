@@ -1,11 +1,11 @@
-(ns symus.laurelmir.viewer
+(ns sfsymus.leramir.viewer
   (:require [dali.syntax :as dali]
             [dali.io :as io]
-            [symus.laurelmir :as l]
-            [symus.laurelmir.types.timed-value :as tv]
-            [symus.laurelmir.protocols.pitch :as pitch]
-            [symus.laurelmir.rational :as r]
-            [symus.laurelmir.utils.math :as utils.math]))
+            [sfsymus.leramir :as l]
+            [sfsymus.leramir.types.timed-value :as tv]
+            [sfsymus.leramir.protocols.pitch :as pitch]
+            [sfsymus.leramir.rational :as r]
+            [sfsymus.leramir.utils.math :as utils.math]))
 
 (defn spy [x]
   (println x)

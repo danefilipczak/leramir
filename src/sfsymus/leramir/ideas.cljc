@@ -1,7 +1,7 @@
-(ns symus.laurelmir.ideas 
+(ns sfsymus.leramir.ideas 
   (:require [clojure.spec.alpha :as spec]
             [clojure.spec.alpha :as s]
-            [symus.laurelmir :as l]))
+            [sfsymus.leramir :as l]))
 
 (defprotocol IDepend
   (dependency-path [self]))
@@ -71,13 +71,16 @@
   )
 
 (comment
+  
+
+  (
+   )
+
 
 
   (def modifiers #{:shift ;; modify by a rational value 
                    :offset ;; modify by a numeric value
-                   })
-
-  (spec/def ::dependancies (spec/map-of keyword? keyword?))
+                   }) 
 
   (spec/def ::props (spec/keys
                      :req [::now]

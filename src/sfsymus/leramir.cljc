@@ -1,11 +1,11 @@
-(ns symus.laurelmir
+(ns sfsymus.leramir
   (:refer-clojure :exclude [ancestors])
   (:require [clojure.core.match :refer [match]]
             [clojure.set]
             [clojure.spec.alpha :as spec]
             [hyperfiddle.rcf :refer [tests]]
-            [symus.laurelmir.rational :as r]
-            [symus.laurelmir.types.timed-value :as tv]))
+            [sfsymus.leramir.rational :as r]
+            [sfsymus.leramir.types.timed-value :as tv]))
 
 (defn spy [x]
   (println x)
