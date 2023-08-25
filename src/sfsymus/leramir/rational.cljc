@@ -46,6 +46,20 @@
     a
     (recur b (mod a b))))
 
+(defn least-common-multiple [a b]
+  (if (or (clojure.core/zero? a) (clojure.core/zero? b))
+    0
+    (quotient 
+     (product a b) 
+     (greatest-common-divisor a b))))
+
+(defn convert-denominator [new-denominator r]
+  (r/rational
+   (product 
+    (numerator r) 
+    (quotient new-denominator (denominator r)))
+   new-denominator))
+
 (defn normalize [rat]
   (let [gcd (greatest-common-divisor (numerator rat) (denominator rat))]
     (rational
