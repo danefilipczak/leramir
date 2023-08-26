@@ -16,7 +16,7 @@
       (swap! counter inc)
       @counter)))
 
-#_(l/->path->timed-value
+#_(l/->path-value-map
  [:heap
   [1 2 3 [#{2 3 4}]]
   @(now-in [0])
@@ -34,7 +34,7 @@
    :c #{:x}})
 
 (comment
-  (l/->path->timed-value [1 [2 [3 4]]]) 
+  (l/era->path-value-map [1 [2 [3 4]]]) 
   
   (def dependencies
     {[] #{[0] [1]}

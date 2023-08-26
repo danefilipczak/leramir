@@ -11,13 +11,13 @@
   (println x)
   x)
 
-(defn piano-roll [width height p->tv]
-  (let [pitches (sort (mapcat (comp pitch/pitch-set tv/value) (vals p->tv)))
+(defn piano-roll [width height path-value-map]
+  (let [pitches (sort (mapcat (comp pitch/pitch-set tv/value) (vals path-value-map)))
         min-pitch (first pitches)
         max-pitch (last pitches)
         stave (reverse (range min-pitch (inc max-pitch))) 
         height-per-stave (float (/ height (count stave)))
-        last-end (last (sort (map (comp r/realize tv/end) (vals p->tv)))) 
+        last-end (last (sort (map (comp r/realize tv/end) (vals path-value-map)))) 
         rescale-tv-time (fn [tv-time] (float (utils.math/map-range (r/realize tv-time) 0 last-end 0 width)))
         nn->i (zipmap stave (range))
         nn->height (fn [nn]
@@ -37,7 +37,7 @@
                 :y (nn->height nn)
                 :width width
                 :height height-per-stave}])
-            (for [tv (vals p->tv) 
+            (for [tv (vals path-value-map) 
                   :let [pitch-set (pitch/pitch-set (tv/value tv))
                         color (:color (tv/attrs tv))]
                   nn pitch-set
@@ -80,15 +80,15 @@
   (into [:g {:transform (str "translate(" x " " y ")")}] children))
 
 (defn vizualize-era [era]
-  (let [p->tv (l/->path->timed-value era)
+  (let [path-value-map (l/era->path-value-map era)
         width 500
         per-rung 10
         rung-padding 5
         rung-total (+ rung-padding per-rung)
         piano-roll-height 300
-        metas (into {} (filter (fn [[path tv]] (keyword? (tv/value tv))) p->tv)) ;; todo -> rewrite with specter
+        metas (into {} (filter (fn [[path tv]] (keyword? (tv/value tv))) path-value-map)) ;; todo -> rewrite with specter
         max-count (apply max (map count (keys metas)))
-        last-end (last (sort (map (comp r/realize tv/end) (vals p->tv))))
+        last-end (last (sort (map (comp r/realize tv/end) (vals path-value-map))))
         rescale-tv-time (fn [tv-time] (float (utils.math/map-range (r/realize tv-time) 0 last-end 0 width)))
         margin-height (* rung-total (inc max-count))
         total-height (+ margin-height piano-roll-height)]
@@ -107,11 +107,11 @@
                            (rescale-tv-time (tv/end tv))
                            per-rung)))
      (translate 0 margin-height
-                (piano-roll width piano-roll-height p->tv))]))
+                (piano-roll width piano-roll-height path-value-map))]))
 
   (comment
     
-    (l/->path->timed-value (into [:chain] [1]))
+    (l/era->path-value-map (into [:chain] [1]))
     
     (vizualize-era 
      (into [:chain] [#{1} #{2 3}]))
@@ -192,14 +192,14 @@
       [1 2 3 [:graft [:heap 4 5] 5] 6 :>]
       [1 2 3 [:graft [:heap 4 5] 5] 6 :>]])
 
-    (l/->path->timed-value
+    (l/era->path-value-map
      [:heap
       [:chain [1 3] [2] 3 4]
       [:chain [0 0 0] [0 0 0]]])
 
     (get #{1 2 3} 2)
 
-    ( l/->path->timed-value )
+    ( l/era->path-value-map )
 
     
 

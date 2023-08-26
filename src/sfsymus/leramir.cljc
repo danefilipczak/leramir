@@ -239,7 +239,7 @@
     (register-dependencies descendents self)))
 
 (comment
-  (->path->timed-value [:chain 1 2 3])
+  (era->path-value-map [:chain 1 2 3])
 
   [:chain :backtrack :default :love 1 2 3]
 
@@ -257,12 +257,14 @@
   (and (vector? x)
        (every? integer? x)))
 
-(defn path->timed-value? [x]
-  (spec/valid? (spec/map-of path? tv/timed-value?) x))
+(spec/def ::path-value-map (spec/map-of path? tv/timed-value?))
+
+(defn path-value-map? [x]
+  (spec/valid? ::path-value-map x))
 
 (comment
   
-  (path->timed-value? (->path->timed-value [1 2 3]))
+  (path-value-map? (era->path-value-map [1 2 3]))
   
   [1 2 3 [2 3 [:tie 4]] [2 :>]]
   [[ 1 2 3 [:tie 4]] [4 2 3 4]]
@@ -273,12 +275,13 @@
   (get-in-era [[:heap 0 4]] [0 1])
   )
 
-(defn ->path->timed-value [x]
+(defn era->path-value-map [x]
+  {:post [( path-value-map? %)]}
   (denominate r/one r/zero [] {} x))
 
 (comment 
   
-  (->path->timed-value 
+  (era->path-value-map 
    [:chain
     [1 2 3 [:graft [:heap 4 5] 5] :> 6 1]
     [1 2 3 [:graft [:heap [4 5] 1] 5] 6 :>]
@@ -288,20 +291,20 @@
 (defn roundtrips? [era]
   (every?
    true?
-   (for [[path timed-value] (->path->timed-value era)]
+   (for [[path timed-value] (era->path-value-map era)]
      (= (era-get-in era path)
         (tv/value timed-value)))))
 
 ;; todo tests for roundtrips?
 
-(defn detect-circular-dependency? [p->tv] ;; todo rewrite me : (
+(defn detect-circular-dependency? [path-value-map] ;; todo rewrite me : (
   (let [visited (atom #{})
         in-progress (atom #{})
         cycle (atom false)]
 
     (defn dfs [node]
       (swap! in-progress conj node)
-      (doseq [dep (tv/->deps (p->tv node))]
+      (doseq [dep (tv/->deps (path-value-map node))]
         (if (contains? @in-progress dep)
           (do (reset! cycle true)
               (throw (Exception. (str "Circular dependency found: " node " -> " dep))))
@@ -310,7 +313,7 @@
       (swap! in-progress disj node)
       (swap! visited conj node))
 
-    (doseq [node (keys p->tv)]
+    (doseq [node (keys path-value-map)]
       (when (not (contains? @visited node))
         (dfs node)))
 
@@ -321,7 +324,7 @@
 
 
   (detect-circular-dependency?
-   (->path->timed-value [:heap 1 2 3]))
+   (era->path-value-map [:heap 1 2 3]))
   )
 
 
