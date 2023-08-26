@@ -11,12 +11,8 @@
   (println x)
   x)
 
-(defn maybe-discreet [x]
-  (when (satisfies? pitch/IPitch x)
-    (pitch/discreet x)))
-
 (defn piano-roll [width height p->tv]
-  (let [pitches (sort (keep (comp maybe-discreet tv/value) (vals p->tv)))
+  (let [pitches (sort (mapcat (comp pitch/pitch-set tv/value) (vals p->tv)))
         min-pitch (first pitches)
         max-pitch (last pitches)
         stave (reverse (range min-pitch (inc max-pitch))) 
@@ -41,9 +37,10 @@
                 :y (nn->height nn)
                 :width width
                 :height height-per-stave}])
-            (for [tv (vals p->tv)
-                  :let [nn (maybe-discreet (tv/value tv))
+            (for [tv (vals p->tv) 
+                  :let [pitch-set (pitch/pitch-set (tv/value tv))
                         color (:color (tv/attrs tv))]
+                  nn pitch-set
                   :when nn]
               [:rect
                {:stroke :gainsboro 
@@ -113,6 +110,13 @@
                 (piano-roll width piano-roll-height p->tv))]))
 
   (comment
+    
+    (l/->path->timed-value (into [:chain] [1]))
+    
+    (vizualize-era 
+     (into [:chain] [#{1} #{2 3}]))
+    
+
     ;; tonality and qualia - tonality is a more specific version of 'qualia'
     
     [1 
@@ -126,9 +130,9 @@
        ]
       ;; constructs and immediatley returns the dependencies. 
       ;; in order to avoid evaluating circular dependencies, does not immediatley calculate values.
-       (fn [[a b]]
-         (= a b )
-         ))
+      (fn [[a b]]
+        (= a b )
+        ))
      
      [(stream [:sym/era-get [1 2 3]])
       ;; or
@@ -139,7 +143,7 @@
       ;; the takeaway: many things can be cast to streams.
       ;; streams have children that are functions, which transform in real time the values appearing in the streams. 
       ;; streams abstract over 'start' and 'end' events in order to provide a similar interface to eras. 
-
+      
       ;; 
       
       (sym
@@ -160,10 +164,10 @@
      
      ;; i see how values coming in could be used to set state, 
      ;; which means that more 'static' subscriptions could depend on them
-
+     
      ;; what I don't see is how incoming values could be used more like an instrument with effects applied.
      ;; it seems that we need an additional class of 'thing', a live input channel
-
+     
      ;; is a live 'stream' sufficiently different from a data subscription?
      ;; data sub - known time/events, potentially unknown / stateful data
      ;; live stream - unknown time/events, known ranges where subs are applicable.

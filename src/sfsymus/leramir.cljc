@@ -45,13 +45,17 @@
  {:color :blue}
  )
 
+
+
 (defmulti denominate (fn [_whole _start _path attrs x]
-                       (cond
-                         (set? x) ::set
+                       (cond 
+
                          (sequential? x)
                          (cond
                            (contains? (methods denominate) (first x)) (first x) 
-                           :else :era))))
+                           :else :era)
+                         
+                         :else :default)))
 
 (defmethod denominate :default 
   [whole start path attrs x]
@@ -174,13 +178,6 @@
   (merge
    (apply update-single-val self tv/register-deps (keys descendents))
    descendents))
-
-(defmethod denominate ::set
-  [whole start path attrs x]
-  (apply 
-   merge
-   (for [[i v] (zipmap (range) x)]
-     (denominate whole start (conj path i) attrs v))))
 
 (defmethod denominate :graft
   [whole' start' path ancestor-attrs x]
