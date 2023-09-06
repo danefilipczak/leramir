@@ -4,6 +4,7 @@
             [clojure.set]
             [clojure.spec.alpha :as spec]
             [hyperfiddle.rcf :refer [tests]]
+            [clojure.data :as data]
             [sfsymus.leramir.rational :as r]
             [sfsymus.leramir.types.timed-value :as tv]))
 
@@ -132,42 +133,44 @@
     r/one))
 
 (defn denominate-era* [whole start path attrs x']
-  (let [x (children x')
-        divisions (reduce r/+ (map denomination x))
-        per-value (r// whole divisions)
-        end (r/+ start whole)]
-    (->> x
-         (interleave (range))
-         (partition 2)
-         reverse
-         (reduce
-          (fn [[i acc additional] [index curr]]
-            (let [duration (r/+ (r/* per-value (denomination curr))
-                                (r/* per-value additional))
-                  start' (r/- end
-                              (r/* per-value
-                                   (r/+ i (denomination curr))))
-                  next-i (r/+ i (denomination curr))]
-              (if (= curr :>)
-                [next-i
-                 acc
-                 (r/+ additional r/one)]
-                [next-i
-                 (merge
-                  acc
-                  (denominate
-                   duration
-                   start'
-                   (conj path index)
-                   (merge-attrs 
-                    (attrs curr)
-                    attrs
-                    path)
-                   curr))
-                 r/zero])))
-          [r/zero {} r/zero])
-         second
-         (into {}))))
+  (let [x (children x')]
+    (if (empty? x)
+      {}
+      (let [divisions (reduce r/+ (map denomination x))
+            per-value (r// whole divisions)
+            end (r/+ start whole)]
+        (->> x
+             (interleave (range))
+             (partition 2)
+             reverse
+             (reduce
+              (fn [[i acc additional] [index curr]]
+                (let [duration (r/+ (r/* per-value (denomination curr))
+                                    (r/* per-value additional))
+                      start' (r/- end
+                                  (r/* per-value
+                                       (r/+ i (denomination curr))))
+                      next-i (r/+ i (denomination curr))]
+                  (if (= curr :>)
+                    [next-i
+                     acc
+                     (r/+ additional r/one)]
+                    [next-i
+                     (merge
+                      acc
+                      (denominate
+                       duration
+                       start'
+                       (conj path index)
+                       (merge-attrs 
+                        (when (sequential? curr) (attrs curr))
+                        attrs
+                        path)
+                       curr))
+                     r/zero])))
+              [r/zero {} r/zero])
+             second
+             (into {}))))))
 
 (defn update-single-val [m f & args]
   {:pre [(= 1 (count m))]}
@@ -250,8 +253,29 @@
   (nth (children era) index))
 
 (defn era-get-in
-  [p ks]
-  (reduce era-get p ks))
+  [era path]
+  (reduce era-get era path))
+
+(defn ->era [tag attrs children]
+  (into
+   [(or tag :era)
+    (or  attrs {})]
+   (or children [])))
+
+(defn era-assoc [era index value]
+  (->era
+   (tag era)
+   (attrs era)
+   (assoc
+    (children era)
+    index
+    value)))
+
+(defn era-assoc-in 
+  [m [k & ks] v]
+  (if ks
+    (era-assoc m k (era-assoc-in (era-get m k) ks v))
+    (era-assoc m k v)))
 
 (defn path? [x]
   (and (vector? x)
@@ -279,14 +303,87 @@
   {:post [( path-value-map? %)]}
   (denominate r/one r/zero [] {} x))
 
-(comment 
-  
-  (era->path-value-map 
-   [:chain
-    [1 2 3 [:graft [:heap 4 5] 5] :> 6 1]
-    [1 2 3 [:graft [:heap [4 5] 1] 5] 6 :>]
-    [1 2 3 [:graft [:heap 4 5] 5] 6 :>]])
-  )
+(defn path-value-map->era [path-value-map]
+  {:pre [(path-value-map? path-value-map)]} 
+  (first (reduce (fn [[acc attrs] [path tv]]
+                   (if-not (contains? special-keywords (tv/value tv))
+                     [(era-assoc-in acc path (tv/value tv)) attrs]
+                     (let [era (->era
+                                (tv/value tv)
+                                (into {} (second (data/diff attrs (tv/attrs tv))))
+                                [])]
+                       [(if (seq path)
+                          (era-assoc-in
+                           acc
+                           path
+                           era)
+                          era)
+                        (merge attrs (tv/attrs tv))])))
+                 [[] {}]
+                 (apply sorted-map (apply concat path-value-map)))))
+
+(defn normalize-era* [era]
+  (->era 
+   (tag era)
+   (attrs era)
+   (children era)))
+
+(defn normalize-era [era]
+  (clojure.walk/postwalk 
+   (fn [form]
+     (if (and (sequential? form)
+              (not (map-entry? form)))
+       (normalize-era* form)
+       form))
+   era))
+
+(tests
+ "roundtrips"
+ (let [era [:chain {} "te" 1 2 3 [:heap 1 [2 3]]]]
+   (path-value-map->era
+    (era->path-value-map
+     era))
+   :=
+   (normalize-era era))
+ 
+ "with attrs"
+ (let [era [:chain {1 2} "te" 1 2 3 [:heap 1 [2 3]]]]
+   (path-value-map->era
+    (era->path-value-map
+     era))
+   :=
+   (normalize-era era))
+ 
+ "with non-inheritable attrs"
+ (let [era [:chain {:scale (r/rational 1 2)} "te" 1 2 3 [:heap 1 [2 3]]]]
+   (path-value-map->era
+    (era->path-value-map
+     era))
+   :=
+   (normalize-era era))
+ 
+ "with complex nested attrs"
+ (let [era [:chain 
+            {1 2} 
+            [:heap 
+             {1 42
+              2 4} 
+             [:era 
+              {1 2
+               3 4}
+              1]
+             [:era
+              {1 6
+               3 6}
+              1]]]]
+   (path-value-map->era
+    (era->path-value-map
+     era))
+   :=
+   (normalize-era era))
+ )
+
+(def ^:private era->era (comp path-value-map->era era->path-value-map))
 
 (defn roundtrips? [era]
   (every?
@@ -365,17 +462,17 @@
 
 
   ;; heap
-
+  
 
   ;; scale
-
+  
   (def x [[:a (r/rational 0 4) (r/rational 1 4)]
           [:b (r/rational 1 4) (r/rational 1 4)]
           [:c (r/rational 2 4) (r/rational 1 4)]
           [:d (r/rational 3 4) (r/rational 1 4)]])
 
   ;; apply [:scale 3 ...]
-
+  
   ;; scaling is just multiplication
   (mapv
    (fn [[thing start duration]]
@@ -393,15 +490,15 @@
    x)
 
   ;; heap means setting start to 0 and duration to 1
-
+  
   ;; graft means a different way of calculating "content"
-
+  
   ;; when should :> be calculated?
   ;; ideally this would occur as quickly in the interpretation stack as possible
-
+  
   ;; possible rule:
   ;; if your ending is my beginning, update your duration to add my duration
-
+  
   [1
    [:stack
     [3 4]
@@ -410,12 +507,12 @@
    :>]
 
   ;; in the above example, 4 14 and 24 all end at :>'s beginning, therefore their durations should be extended by the length of :>
-
+  
   ;; this isn't quite right
-
+  
   ;; another possible rule:
   ;; look at the thing before me, and add the duration of :> to its duration.
-
+  
   [1
    [:stack
     [3 4]
@@ -424,7 +521,7 @@
    :>]
   
   ;; in the above example, the entire :stack will now take, in this case, twice as long as it did
-
+  
   [1
    [:graft
     [3 4]
@@ -434,6 +531,8 @@
   
   ;; in the above, there are five divisions of the pattern, with [23 24] getting two beats
   ;; 
+  
+  [:chain [1 2 3] [:> 4 5]]
 
 
 
@@ -444,11 +543,11 @@
 
   [:graft 3 :> :>]
   ;; you need either a start and a duration, or a start and an end
-
+  
 
 
   ;;;;;;
-
+  
 
 
 
