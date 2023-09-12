@@ -6,11 +6,16 @@
             [hyperfiddle.rcf :refer [tests]]
             [clojure.data :as data]
             [sfsymus.leramir.rational :as r]
-            [sfsymus.leramir.types.timed-value :as tv]))
+            [sfsymus.leramir.types.timed-value :as tv]
+            [clojure.core.match :as m]))
 
 (defn spy [x]
   (println x)
   x)
+
+(defn ->sorted-map [map]
+  {:pre [(map? map)]}
+  (apply sorted-map (apply concat map)))
 
 (def special-keywords #{:heap :graft :chain :era})
 
@@ -320,7 +325,7 @@
                           era)
                         (merge attrs (tv/attrs tv))])))
                  [[] {}]
-                 (apply sorted-map (apply concat path-value-map)))))
+                 (->sorted-map path-value-map))))
 
 (defn normalize-era* [era]
   (->era 
@@ -388,11 +393,99 @@
 (defn roundtrips? [era]
   (every?
    true?
-   (for [[path timed-value] (era->path-value-map era)]
+   (for [[path timed-value] (era->path-value-map era)
+         :when (not (contains? special-keywords (tv/value timed-value)))]
      (= (era-get-in era path)
         (tv/value timed-value)))))
 
-;; todo tests for roundtrips?
+(tests
+ (roundtrips? [:era 1 2 3]) := true 
+ (roundtrips? [:era {} [:chain 1 2 3 [:heap [23] [45]]]]) := true 
+ )
+
+(defn disjoint? [start1 end1 start2 end2]
+  (or (r/<= end1 start2)
+      (r/<= end2 start1)))
+
+(def intersecting? (complement disjoint?))
+
+(comment 
+  (intersecting?
+   r/one
+   (r/rational 2 1)
+   (r/rational 1 2)
+   (r/rational 2 1))
+  
+  [1 1 0 0]
+  [0 0 1 1]
+  )
+
+(defn slice-pvm [pvm start duration]
+  {:pre [(and 
+          (path-value-map? pvm)
+          (r/rational? start) 
+          (r/rational? duration))]
+   :post [(every? tv/timed-value? %)]}
+  (let [end (r/+ start duration)
+        slice (fn [[_path tv]]
+                (let
+                 [starts-within? (and (r/>= (tv/start tv) start)
+                                      (r/< (tv/start tv) end))
+                  ends-within? (and (r/> (tv/end tv) start)
+                                    (r/<= (tv/end tv) end))
+                  overlap? (intersecting?
+                            start
+                            end
+                            (tv/start tv)
+                            (tv/end tv))]
+                  (clojure.core.match/match
+                   [overlap? starts-within? ends-within?]
+                    [false _ _]
+                    nil
+
+                    [_ true true] ;; :the-unmodified-thing
+                    tv 
+
+                    [_ false true] ;; :the-thing-truncated-as-a-tie-end
+                    (tv/truncate-start tv start) 
+
+                    [_ true false] ;; :the-thing-truncated-as-a-tie-start
+                    (tv/truncate-end tv end)
+                    
+                    [_ false false];; :the-thing-truncated-as-a-tie-continue
+                    (tv/truncate-both tv start end)
+                    )))]
+    (->> (->sorted-map pvm)
+         (keep slice)
+         (map (partial tv/translate (r/- r/zero start))))))
+
+(comment 
+
+  (slice-pvm 
+   (era->path-value-map [:chain [1 2 3] [4 5 6]])
+   r/one
+   r/one)
+  
+  ;; we need a new data structure that represents eras as a tree that is constantly factored to itself.
+  ;; do some compute on insert to make sure that everything is always expressed with a common denominator
+  ;; then we need build to a query api where you can say things like, give me exactly what's happening here
+
+  ;; concretely, what this would mean is that we choose a number that represents the smallest division of time, in nths of an era
+  ;; every node in the tree could then become associated with a scalar that represents how many 'ticks' 
+
+  ;; concrete step: test whether ties in musicxml work 'across voices' in the sense that a default voice will tie with voice 1
+  [1 2 3]
+  [nil true] ;; boolean ui
+  )
+
+(defn slice [era start duration]
+  {:pre [(and (r/rational? start)
+              (r/rational? duration))]}
+  (path-value-map->era 
+   (slice-pvm 
+    (era->path-value-map era) 
+    start 
+    duration)))
 
 (defn detect-circular-dependency? [path-value-map] ;; todo rewrite me : (
   (let [visited (atom #{})

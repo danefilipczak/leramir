@@ -1,5 +1,5 @@
 (ns sfsymus.leramir.rational
-  (:refer-clojure :exclude [rational? numerator denominator + - * / *' +' - -' pos? neg? zero?])
+  (:refer-clojure :exclude [rational? numerator denominator + - * / *' +' - -' pos? neg? zero? >= > <= <])
   (:require [hyperfiddle.rcf :refer [tests]]
             [sfsymus.leramir.rational :as r]))
 
@@ -137,3 +137,35 @@
  (neg? zero) := false
  
  )
+
+(defn unify-denominators [& rs]
+  (let [d (reduce least-common-multiple (map denominator rs))]
+    (map (partial convert-denominator d) rs)))
+
+(defn make-comparator [compare-fn]
+  (fn [& rs]
+    (apply compare-fn (map numerator (apply unify-denominators rs)))))
+
+(def >= (make-comparator clojure.core/>=))
+(def > (make-comparator clojure.core/>))
+(def <= (make-comparator clojure.core/<=))
+(def < (make-comparator clojure.core/<))
+
+(tests 
+ (>= (rational 3 2) (rational 2 2) (rational 2 2) (rational 1 2) (rational 1 2)) := true
+ (>= (rational 2 2) (rational 2 2) (rational 3 2) (rational 1 2) (rational 1 2)) := false
+
+ (> (rational 1 3) (rational 2 3)) := false 
+ (> (rational 1 3) (rational 1 3)) := false
+ (> (rational 1 3) (rational 1 6)) := true
+ )
+
+(comment
+  
+  
+  (unify-denominators 
+   (rational 1 2) 
+   (rational 1 4)
+   (rational 1 3)
+   (rational 1 13))
+  )
