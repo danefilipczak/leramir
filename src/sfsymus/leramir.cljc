@@ -69,21 +69,21 @@
     (assert (special-keywords x) (str "not special " x)))
   {path (tv/->timed-value whole start attrs x)})
 
-(defn graft? [x]
-  (and 
-   (sequential? x)
-   (= (first x) :graft)))
+(def aliases {:+ :chain
+              := :heap
+              :<> :graft
+              :- :era})
 
 (defn parse-form [form]
   (match form
     [tag :guard keyword?
      attrs :guard map?
      & children]
-    [tag attrs children]
+    [(aliases tag tag) attrs children]
     
     [tag :guard keyword?
      & children]
-    [tag nil children]
+    [(aliases tag tag) nil children]
     
     :else
     [:era nil form]))
@@ -116,6 +116,18 @@
 
  (children [:era 1 2 3 4 5]) := [1 2 3 4 5])
 
+(defn era? [form]
+  (and (sequential? form) (not (map-entry? form))))
+
+(defn graft? [x]
+  (and (era? x) (= (tag x) :graft)))
+
+(defn chain? [x]
+  (and (era? x) (= (tag x) :chain)))
+
+(defn heap? [x]
+  (and (era? x) (= (tag x) :heap)))
+
 (defn scale [whole attrs]
   (if-let [scale (:scale attrs)]
     (do (assert (r/rational? scale))
@@ -131,8 +143,7 @@
         (r/+ start (r/* whole shift)))
     start))
 
-(defn denomination [x] 
-  ;; how many divisions am I worth?
+(defn weight [x] 
   (if (graft? x)
     (r/rational (count (children x)) 1)
     r/one))
@@ -141,7 +152,7 @@
   (let [x (children x')]
     (if (empty? x)
       {}
-      (let [divisions (reduce r/+ (map denomination x))
+      (let [divisions (reduce r/+ (map weight x))
             per-value (r// whole divisions)
             end (r/+ start whole)]
         (->> x
@@ -150,12 +161,12 @@
              reverse
              (reduce
               (fn [[i acc additional] [index curr]]
-                (let [duration (r/+ (r/* per-value (denomination curr))
+                (let [duration (r/+ (r/* per-value (weight curr))
                                     (r/* per-value additional))
                       start' (r/- end
                                   (r/* per-value
-                                       (r/+ i (denomination curr))))
-                      next-i (r/+ i (denomination curr))]
+                                       (r/+ i (weight curr))))
+                      next-i (r/+ i (weight curr))]
                   (if (= curr :>)
                     [next-i
                      acc
@@ -336,8 +347,7 @@
 (defn normalize-era [era]
   (clojure.walk/postwalk 
    (fn [form]
-     (if (and (sequential? form)
-              (not (map-entry? form)))
+     (if (era? form)
        (normalize-era* form)
        form))
    era))
@@ -403,6 +413,11 @@
  (roundtrips? [:era {} [:chain 1 2 3 [:heap [23] [45]]]]) := true 
  )
 
+(defn contained? [start1 end1 start2 end2]
+  ;; does span 1 completely contain span 2?
+  (and (r/<= start1 start2)
+       (r/>= end1 end2)))
+
 (defn disjoint? [start1 end1 start2 end2]
   (or (r/<= end1 start2)
       (r/<= end2 start1)))
@@ -459,13 +474,125 @@
          (keep slice)
          (map (partial tv/translate (r/- r/zero start))))))
 
-(comment 
+(defn force-era [x]
+  (if (era? x)
+    x
+    [x]))
 
-  (slice-pvm 
+(defn jared* [voice-tree-path form]
+  (if (era? form)
+    (let [era-duration (cond-> r/one
+                         (chain? form) (r/* (r/integer (count (children form))))
+                         :always (scale (attrs form)))
+          era-start (shift era-duration r/zero (attrs form))
+          era-end (r/+ era-start era-duration)
+          overflow? (not (contained?
+                          r/zero
+                          r/one
+                          era-start
+                          era-end))
+               ;; this is great but it must also take into account whether there is anything 'there' to intersect with. 
+               ;; a bunch of nils shouldn't count as an intersection. 
+               ;; maybe cast to pvm and do bounds checking on anything that has a path at that level or lower? 
+          new-vtp (if overflow? (conj voice-tree-path 0) voice-tree-path)
+          children (map-indexed
+                    (fn [i child]
+                      (apply jared*
+                             (if (= :heap (tag form))
+                               [(conj (pop new-vtp) (+ i (peek new-vtp)))
+                                (force-era child)]
+                               [new-vtp
+                                child])))
+                    (children form))]
+      (->era
+       (tag form)
+       (assoc
+        (attrs form)
+        :voice new-vtp)
+       children))
+    form))
+
+(defn jared [era]
+  (jared* [:v 0] era))
+
+(comment
+
+  (jared
+   [:=
+    [:chain
+     [:heap
+      [1 2 3]
+      [1 2 3]]
+     :>
+     3
+     4]
+    [:chain 1 2 3 4]
+    3
+    4]))
+
+(defn era->voice-seq [era]
+  ;; a voice is, what exactly?
+  ;; well, it has no parallel composition, by definition. 
+  ;; it may only include single, rhythmically independent lines.
+  ;; heaps are out of the question
+  ;; chains, scales, etc are fine, and we probably don't want to collapse them
+
+  [:chain 1 2 3 []]
+  )
+
+(comment
+  ;; we want to preserve the intuition that an 'unvoiced' part can tie with voice 1
+  [:=
+   [nil]
+   [nil]] ;; two different parts
+
+  [:=
+   [:+ [:+ nil 1] 2 :>]
+   [nil]] ;; two parts, the first now has two voices. but which gets the wing?
+
+  ;; # options:
+  ;; the lastmost in the heap gets it - doesn't preserve the 'unvoiced part' intuition
+  ;; the firstmost in the heap gets it - doesn't make sense because the firstmost isn't guaranteed to have terminated yet
+  ;; whichever would naturally be assigned to the same voice, the same level of nesting, gets it - let's explore these implications  
+
+  [:+ [:+ nil 1] 2 :>] ;; the 1 gets extended because the bird exists on the 'default' level
+  [:+ [:+ nil 1 3] 2 :>] ;; the 2 gets extended because the bird has been pushed to heap 2
+
+  ;; does this preserve the part / voice intuition? 
+  [:=
+   [:+
+    [:=
+     [1 2 3]
+     [1 2 3]]
+    [:> 2 3]]
+   "part 2 stuff"]
+  ;; yeah, basically
+
+  ;; so how can we formalize this scheme?
+  ;; parallel composition can be acheived in two ways
+  ;; using the parallel operator, things retain their order
+  ;; using a nested series operator, a new level of nesting is introduced. 
+
+  ;; therefore, voices are hierarchical, not just simply ordered.
+  ;; in order for the wing to take effect, you must match the voice at that hierarchy level if one exists.
+  ;; otherwise, it can effect things lower in the hierarchy if it above them. maybe?
+
+  ;; let's draw some graphs
+  [:+ [:+ nil 1 3] 2 :>]
+
+  :<> ;;graft
+  :> ;;wing
+  := ;;heap
+  :+ ;;chain
+
+
+  [:+]
+
+  (slice-pvm
    (era->path-value-map [:chain [1 2 3] [4 5 6]])
    r/one
    r/one)
-  
+
   ;; we need a new data structure that represents eras as a tree that is constantly factored to itself.
   ;; do some compute on insert to make sure that everything is always expressed with a common denominator
   ;; then we need build to a query api where you can say things like, give me exactly what's happening here
@@ -550,7 +677,7 @@
   ;;;; protocol thinking
   (defprotocol IRationalize
     (content) ;; return what's in you as a sorted, rationalized set
-    (denomination) ;; returns how many 'counts' you're worth - usually this will be 1, but may be more in the case of grafts
+    (weight) ;; returns how many 'counts' you're worth - usually this will be 1, but may be more in the case of grafts
     )
 
 
