@@ -6,8 +6,8 @@
             [hyperfiddle.rcf :refer [tests]]
             [clojure.data :as data]
             [sfsymus.leramir.rational :as r]
-            [sfsymus.leramir.types.timed-value :as tv]
-            [clojure.core.match :as m]))
+            [meander.epsilon :as m]
+            [sfsymus.leramir.types.timed-value :as tv]))
 
 (defn spy [x]
   (println x)
@@ -19,9 +19,10 @@
 
 (def special-keywords #{:heap :graft :chain :era})
 
-;; make attrs inheritable - keep in attrs metadata a map of the attr and the path from which it is descended
-;; update parser to include scale, update viewer to include color attrs
 (def uninheritable-attributes #{:scale :shift})
+
+;; attributes that can modify time, and are therefore needed to express the overall structure of the piece.
+(def temporal-attributes #{:shift :scale}) 
 
 (defn merge-attrs [mine ancestors path]
   (with-meta 
@@ -479,7 +480,7 @@
     x
     [x]))
 
-(defn jared* [voice-tree-path form]
+(defn assoc-voices* [voice-tree-path form]
   (if (era? form)
     (let [era-duration (cond-> r/one
                          (chain? form) (r/* (r/integer (count (children form))))
@@ -497,7 +498,7 @@
           new-vtp (if overflow? (conj voice-tree-path 0) voice-tree-path)
           children (map-indexed
                     (fn [i child]
-                      (apply jared*
+                      (apply assoc-voices*
                              (if (= :heap (tag form))
                                [(conj (pop new-vtp) (+ i (peek new-vtp)))
                                 (force-era child)]
@@ -512,12 +513,11 @@
        children))
     form))
 
-(defn jared [era]
-  (jared* [:v 0] era))
+(defn assoc-voices [era]
+  (assoc-voices* [:v 0] era))
 
 (comment
-
-  (jared
+  (assoc-voices
    [:=
     [:chain
      [:heap
@@ -530,7 +530,78 @@
     3
     4]))
 
+(defn empty-era? [era]
+  (and (era? era) (every? nil? (children era))))
+
+(def empty-graft? (every-pred graft? empty-era?))
+
+
+(defn handle-empty-grafts [era]
+  (->era
+   (tag era)
+   (attrs era)
+   (reduce
+    (fn [acc curr]
+      (if (empty-graft? curr)
+        (vec (concat acc (take (count (children curr)) (repeat nil))))
+        (conj acc curr)))
+    []
+    (children era))))
+
+(defn handle-singleton-heaps [era]
+    ;; if a heap has one element in it, and is not being used to modify time, it may be rewritten to that element
+  (if (and (heap? era)
+           (= 1 (count (children era)))
+           (empty? (select-keys (attrs era) temporal-attributes)))
+    (first (children era))
+    era))
+
+(defn query-by-attrs [pred form]
+  (if-not (era? form)
+    form
+    (let [valid? (pred (attrs form))
+          to-nil (fn [x] (when (or valid? (era? x)) x))
+          new-era (->era
+                   (tag form)
+                   (if valid? (attrs form) (select-keys (attrs form) temporal-attributes))
+                   (map (comp to-nil (partial query-by-attrs pred)) (children form)))]
+      (when (or valid?
+                (graft? new-era)
+                (not (empty-era? new-era)))
+        (-> new-era ;; todo extract all this simplifying stuff and implement using term rewriting
+              ;; an additional rule: any nil values found at the end of a chain may be safely discarded
+            handle-empty-grafts 
+            handle-singleton-heaps)))))
+
+(comment  
+
+  ;; todo - we need to change the implementation of :<> so that it is respected in chains and heaps, not just eras
+
+  (query-by-attrs 
+   :keep
+   [:=
+    [:graft 1 2 3]
+    [:chain
+     {:keep true}
+     [:heap
+      1
+      2
+      [1 2 3]
+      [:era {:keep true} [1 2 3]]]
+     :>
+     3
+     4]
+    [:chain 1 2 3 4]
+    3
+    4]) 
+  )
+
 (defn era->voice-seq [era]
+  (let [era-with-voice-annotations (assoc-voices era)
+        all-voices #{}]
+    (for [x all-voices]
+      (query-by-attrs (comp (partial = x) :voice-tree-path) era)
+      ))
   ;; a voice is, what exactly?
   ;; well, it has no parallel composition, by definition. 
   ;; it may only include single, rhythmically independent lines.

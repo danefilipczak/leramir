@@ -110,6 +110,9 @@
 (defn zero? [r]
   (clojure.core/zero? (numerator r)))
 
+(defn integer [i]
+  (rational i 1))
+
 (defn ^:private neg?* [r]
   (not= 
    (clojure.core/neg? (numerator r))
