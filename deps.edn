@@ -3,6 +3,7 @@
         org.clojure/math.combinatorics {:mvn/version "0.2.0"}
         org.clojure/core.match {:mvn/version "1.0.1"}
         meander/epsilon {:mvn/version "0.0.650"}
+        org.clojure/data.xml {:mvn/version "0.0.8"}
         com.hyperfiddle/rcf {:mvn/version "20220926-202227"}}
  :aliases {:jvm-test {:extra-paths ["test" "src"]
                       :extra-deps {io.github.cognitect-labs/test-runner

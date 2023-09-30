@@ -2,6 +2,7 @@
   (:require [dali.syntax :as dali]
             [dali.io :as io]
             [sfsymus.leramir :as l]
+            [nextjournal.clerk :as clerk]
             [sfsymus.leramir.types.timed-value :as tv]
             [sfsymus.leramir.protocols.pitch :as pitch]
             [sfsymus.leramir.rational :as r]
@@ -10,6 +11,11 @@
 (defn spy [x]
   (println x)
   x)
+
+(comment
+  (clerk/serve! {:browse true})
+  
+  )
 
 (defn piano-roll [width height path-value-map]
   (let [pitches (sort (mapcat (comp pitch/pitch-set tv/value) (vals path-value-map)))
@@ -80,7 +86,7 @@
   (into [:g {:transform (str "translate(" x " " y ")")}] children))
 
 (defn vizualize-era [era]
-  (let [path-value-map (l/era->path-value-map era)
+  (let [path-value-map (l/era->path-value-map-via-ast era)
         width 500
         per-rung 10
         rung-padding 5
@@ -102,12 +108,30 @@
                           :font-family :helvetica
                           :font-size 8
                           :y 0}
-                   (name (tv/value tv))]
+                   (str (name (tv/value tv)) (print-str path))]
                   (bracket (rescale-tv-time (tv/start tv))
                            (rescale-tv-time (tv/end tv))
                            per-rung)))
      (translate 0 margin-height
                 (piano-roll width piano-roll-height path-value-map))]))
+  
+  (defn visualize-voices [era]
+    (let [width 500
+          height 100]
+      ;; a potential 'rule' - if a voice is too long for its current level of parallelism, it inserts itself below as a new voice. 
+      ;; The entire 'stack' gets pushed down, so to speak. 
+      ;; voices are never merged nor split - they're calculated in advance 
+      ;; parallel composition makes a new voice, and series composition makes a new voice when the bounds of the child are greater than the bounds it's alloted by porportion. (shift, scale, or chain)
+      ;; the wing can only effect things in its current voice 
+      ;; let's write the visualiser and associated algorithm for this. 
+
+      ;; core/era->voice-seq
+      [:svg {:width width
+             :height height}]))
+  
+  (clerk/html 
+   (vizualize-era 
+    [:chain [:chain [1 2 3] [2 3 4]] [1 2 3]]))
 
   (comment
     
