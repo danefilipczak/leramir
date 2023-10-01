@@ -498,6 +498,7 @@
     era))
 
 (defn query-by-attrs [pred form]
+  ;; this should be retained but generalized to use the pred on the entire form
   (if-not (era? form)
     form
     (let [valid? (pred (attrs form))
@@ -569,35 +570,41 @@
 ;; compute child data, given current node, as a (potentially infinite) seq
 (defn timeize* [{:keys [duration start]} {:keys [attrs] :as ast'}]
   (case (:type ast')
-    ::era (let [duration (scale duration attrs)
-                start (shift duration start attrs)
-                ast (assoc ast' :duration duration :start start)
+    ::era (let [bounds [start (r/+ start duration)]
+                total-weight (reduce + (map ast-weight (:children ast')))
+                chain? (= (:tag ast') :chain)
+                duration' (scale duration attrs)
+                start' (shift duration' start attrs)
+                ast (assoc
+                     ast'
+                     :duration (cond-> duration'
+                                 chain?
+                                 (r/* (r/integer total-weight)))
+                     :start start')
                 accumulate-durations (fn [ast duration-fn acc-fn]
-                                       (assoc 
-                                        ast 
-                                        :children
-                                        (first 
-                                         (reduce 
-                                          (fn [[result prev-start prev-duration] curr]
-                                            (let [new-duration (duration-fn curr) 
-                                                  new-start (acc-fn prev-start prev-duration)]
-                                              [(conj 
-                                                result
-                                                (timeize* 
-                                                 {:start new-start :duration new-duration}
-                                                 curr))
-                                               new-start
-                                               new-duration]))
-                                          [[] start r/zero]
-                                          (:children ast)))))]
+                                       (let [children (first
+                                                       (reduce
+                                                        (fn [[result prev-start prev-duration] curr]
+                                                          (let [new-duration (duration-fn curr)
+                                                                new-start (acc-fn prev-start prev-duration)]
+                                                            [(conj
+                                                              result
+                                                              (timeize*
+                                                               {:start new-start :duration new-duration}
+                                                               curr))
+                                                             new-start
+                                                             new-duration]))
+                                                        [[] start' r/zero]
+                                                        (:children ast)))]
+                                         (merge ast {:bounds bounds :children children})))]
             (case (:effective-tag ast) 
               :heap 
               ;; start start
               ;; duration duration
               (accumulate-durations 
                ast
-               (constantly duration)
-               (constantly start))
+               (constantly duration')
+               (constantly start'))
               :chain
               ;; start: previous start + previous duration
               ;; duration: weight * parent duration
@@ -605,16 +612,17 @@
                ast
                (fn [c] (r/*
                         (r/integer (ast-weight c))
-                        duration))
+                        duration'))
                r/+)
               :era
               ;; start: previous start + previous duration 
               ;; duration: weight over total effective children
               (accumulate-durations
                ast
-               (fn [c] (r/rational
-                        (ast-weight c)
-                        (reduce + (map ast-weight (:children ast)))))
+               (fn [c] (r/* (r/rational
+                             (ast-weight c)
+                             total-weight)
+                            duration'))
                r/+)))
     ::value (assoc ast' :duration duration :start start)))
   
@@ -649,25 +657,99 @@
 (defn percolate-attrs [ast]
   (percolate-attrs* {} ast))
 
-(defn era->path-value-map-via-ast [era]
+(defn voiceize* [voice-tree-path ast]
+  (if (= ::era (:type ast))
+    (let [[bound-start bound-end] (:bounds ast)
+          overflow? (not (contained?
+                          bound-start
+                          bound-end
+                          (:start ast)
+                          (r/+ (:start ast) (:duration ast))))
+               ;; it may be useful to do a more sophisticated version of collision detection
+          new-vtp (if overflow? (conj voice-tree-path 0) voice-tree-path)
+          children (vec (map-indexed
+                         (fn [i child]
+                           (apply voiceize*
+                                  (if (= :heap (:effective-tag ast)) ;; this might be wrong for grafts. The easiest way to validate will be to build the editor.
+                                    [(conj (pop new-vtp) (+ i (peek new-vtp)))
+                                     child]
+                                    [new-vtp
+                                     child])))
+                         (:children ast)))]
+      (assoc ast :voice voice-tree-path :children children))
+    (assoc ast :voice voice-tree-path)))
+
+(defn voiceize [era]
+  (voiceize* [:v 0] era))
+
+(defn standard-interpretation [era]
   (-> era
       parse
       pathize
       effective-tagize
       timeize
       percolate-attrs
+      voiceize))
+
+(defn ast-path [path]
+  (vec (interleave (repeat :children) path)))
+
+(comment
+  (def ast (standard-interpretation [:heap
+                                     [1 [:chain 2 2] 3]
+                                     [1 2 3]]))
+
+  (era->path-value-map-via-ast [:era {:color :green} 1 2 3 [:graft {:color :red :shift r/one} [4]]]))
+
+(defn era->path-value-map-via-ast [era]
+  (-> era 
+      standard-interpretation
       ast->path-value-map))
 
 (defn era->path-value-map [era]
   {:post [(path-value-map? %)]}
-  ( era->path-value-map-via-ast era))
+  (era->path-value-map-via-ast era))
+
+(defn ->voice->end->path [ast] ;;todo memoize
+  (case (:type ast)
+    ::era (apply 
+           (partial merge-with merge)
+           (map 
+            ->voice->end->path 
+            (reverse (:children ast)))) ;; left to right in order to overwrite wings - does this work in every case?
+    ::value {(:voice ast) 
+             {(r/+ (:start ast) (:duration ast)) 
+              (:path ast)}}))
+
+(defn distribute-wings* [ast current-node]
+  (let [voice->end->path (->voice->end->path ast)]
+    (case (:type current-node)
+      ::era (reduce 
+             distribute-wings* 
+             ast
+             (:children current-node))
+      ::value (if (= :> (:value current-node))
+                (if-let [path (get-in 
+                               voice->end->path 
+                               [(:voice current-node) (:start current-node)])]
+                  (update-in 
+                   ast 
+                   (conj 
+                    (ast-path path) :duration) 
+                   (partial r/+ (:duration current-node)))
+                  ast)
+                ast))))
+
+(defn distribute-wings [ast]
+  (distribute-wings* ast ast))
 
 (comment
-  
-  (era->path-value-map-via-ast [:era {:color :green} 1 2 3 [:graft {:color :red :shift r/one} [4]]]) 
-  )
 
-(comment  
+  (standard-interpretation [1 [5]])
+  
+  (->voice->end->path
+   (distribute-wings 
+    (standard-interpretation [1 2 3 4 [5] :>])))
 
   ;; todo - we need to change the implementation of :<> so that it is respected in chains and heaps, not just eras
 
@@ -682,9 +764,9 @@
   ;; this is parity -> todo check that everything renders in legacy renderer ;; check
   ;; remove references to the old stuff, rip it out
 
-  ;; voice assignment 
-  ;; dependency assignment 
-  ;; wing value assignment :> make a map of voice->end->[value and path]. If exists, extend its duration by wing duration
+  ;; voice assignment ;; czek
+  ;; dependency assignment ;; we don't really need it for now. we know what the model is - come back to this when it's actually useful for effects, etc.
+  ;; wing value assignment :> make a map of voice->end->path. If exists, extend its duration by wing duration
 
   ;; todo make a generative spec, generate some truly large and unruly things, time parsing with both many-pass and single-pass method. 
 
