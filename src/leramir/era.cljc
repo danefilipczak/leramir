@@ -1,14 +1,14 @@
-(ns sfsymus.leramir
+(ns leramir.era
   (:refer-clojure :exclude [ancestors])
   (:require [clojure.core.match :refer [match]]
             [clojure.set]
             [clojure.spec.alpha :as spec]
             [hyperfiddle.rcf :refer [tests]]
             [clojure.data :as data]
-            [sfsymus.leramir.rational :as r]
+            [leramir.rational :as r]
             [meander.epsilon :as m]
             [meander.strategy.epsilon]
-            [sfsymus.leramir.types.timed-value :as tv]))
+            [leramir.types.timed-value :as tv]))
 
 (defn spy [x]
   (println x)

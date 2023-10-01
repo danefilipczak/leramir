@@ -1,7 +1,7 @@
-(ns sfsymus.leramir.ideas 
+(ns leramir.ideas 
   (:require [clojure.spec.alpha :as spec]
             [clojure.spec.alpha :as s]
-            [sfsymus.leramir :as l]))
+            [leramir.era :as l]))
 
 (defprotocol IDepend
   (dependency-path [self]))

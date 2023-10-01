@@ -1,4 +1,4 @@
-(ns sfsymus.leramir.protocols.pitch)
+(ns leramir.protocols.pitch)
 
 
 (defprotocol IPitch

@@ -1,4 +1,4 @@
-(ns sfsymus.leramir.midi)
+(ns leramir.midi)
 
 
 (comment

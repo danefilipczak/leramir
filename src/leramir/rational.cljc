@@ -1,7 +1,7 @@
-(ns sfsymus.leramir.rational
+(ns leramir.rational
   (:refer-clojure :exclude [rational? numerator denominator + - * / *' +' - -' pos? neg? zero? >= > <= <])
   (:require [hyperfiddle.rcf :refer [tests]]
-            [sfsymus.leramir.rational :as r]))
+            [leramir.rational :as r]))
 
 (def sum clojure.core/+)
 (def product clojure.core/*)

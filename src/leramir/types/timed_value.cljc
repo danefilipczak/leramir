@@ -1,5 +1,5 @@
-(ns sfsymus.leramir.types.timed-value
-  (:require [sfsymus.leramir.rational :as r]
+(ns leramir.types.timed-value
+  (:require [leramir.rational :as r]
             [hyperfiddle.rcf :refer [tests]]))
 
 (defrecord TimedValue [duration start attrs value])
