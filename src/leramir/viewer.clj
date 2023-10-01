@@ -6,6 +6,7 @@
             [leramir.types.timed-value :as tv]
             [leramir.protocols.pitch :as pitch]
             [leramir.rational :as r]
+            [leramir.core :as core]
             [leramir.utils.math :as utils.math]))
 
 (defn spy [x]
@@ -86,7 +87,7 @@
   (into [:g {:transform (str "translate(" x " " y ")")}] children))
 
 (defn vizualize-era [era]
-  (let [path-value-map (l/era->path-value-map-via-ast era)
+  (let [path-value-map (core/era->path-value-map era)
         width 500
         per-rung 10
         rung-padding 5
@@ -135,7 +136,7 @@
 
   (comment
     
-    (l/era->path-value-map (into [:chain] [1]))
+    (core/era->path-value-map (into [:chain] [1]))
     
     (vizualize-era 
      (into [:chain] [#{1} #{2 3}]))
@@ -216,14 +217,12 @@
       [1 2 3 [:graft [:heap 4 5] 5] 6 :>]
       [1 2 3 [:graft [:heap 4 5] 5] 6 :>]])
 
-    (l/era->path-value-map
+    (core/era->path-value-map
      [:heap
       [:chain [1 3] [2] 3 4]
       [:chain [0 0 0] [0 0 0]]])
 
-    (get #{1 2 3} 2)
-
-    ( l/era->path-value-map )
+    (get #{1 2 3} 2) 
 
     
 

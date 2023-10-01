@@ -5,6 +5,7 @@
             [leramir.viewer :as viewer]
             [clojure.math.combinatorics :as combo]
             [leramir.rational :as r]
+            [leramir.core :as core]
             [leramir.era :as l]))
 
 ;; # the Signature
@@ -74,7 +75,6 @@
  (viewer/vizualize-era
   (into [:chain] [#{1 2 3} #{2 3 4}]))) 
 
-(leramir/era->path-value-map chords)
 
 ;; ### manners of treatment of the progression
 ;; - one cycle of the progression with a bass drone throughout on the fifth of the final chord. 

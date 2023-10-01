@@ -33,8 +33,7 @@
    :b #{:c}
    :c #{:x}})
 
-(comment
-  (l/era->path-value-map [1 [2 [3 4]]]) 
+(comment 
   
   (def dependencies
     {[] #{[0] [1]}
