@@ -5,7 +5,7 @@
             [clojure.spec.alpha :as spec]
             [hyperfiddle.rcf :refer [tests]]
             [clojure.data :as data]
-            [leramir.rational :as r]
+            [rational.core :as r]
             [meander.epsilon :as m]
             [meander.strategy.epsilon]
             [leramir.types.timed-value :as tv]))
@@ -318,7 +318,7 @@
             handle-empty-grafts 
             handle-singleton-heaps)))))
 
-(defn era->voice-seq [era]
+#_(defn era->voice-seq [era]
   (let [era-with-voice-annotations (assoc-voices era)
         all-voices #{}]
     (for [x all-voices]

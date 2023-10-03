@@ -2,7 +2,7 @@
   {:nextjournal.clerk/visibility {:code :fold}
    :nextjournal.clerk/toc true}
   (:require [nextjournal.clerk :as clerk] 
-            [leramir.rational :as r]
+            [rational.core :as r]
             [leramir.era :as l]))
 
 (def OSMD-viewer

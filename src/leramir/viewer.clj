@@ -5,7 +5,7 @@
             [nextjournal.clerk :as clerk]
             [leramir.types.timed-value :as tv]
             [leramir.protocols.pitch :as pitch]
-            [leramir.rational :as r]
+            [rational.core :as r]
             [leramir.core :as core]
             [leramir.utils.math :as utils.math]))
 

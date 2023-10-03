@@ -1,5 +1,5 @@
 (ns leramir.types.timed-value
-  (:require [leramir.rational :as r]
+  (:require [rational.core :as r]
             [hyperfiddle.rcf :refer [tests]]))
 
 (defrecord TimedValue [duration start attrs value])

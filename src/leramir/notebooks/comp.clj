@@ -4,7 +4,7 @@
   (:require [nextjournal.clerk :as clerk]
             [leramir.viewer :as viewer]
             [clojure.math.combinatorics :as combo]
-            [leramir.rational :as r]
+            [rational.core :as r]
             [leramir.core :as core]
             [leramir.era :as l]))
 

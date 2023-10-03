@@ -1,6 +1,6 @@
 (ns leramir.ast
   (:require [leramir.era]
-            [leramir.rational :as r]
+            [rational.core :as r]
             [leramir.types.timed-value :as tv]
             [hyperfiddle.rcf :refer [tests]]))
 
