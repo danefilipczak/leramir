@@ -1,7 +1,5 @@
 (ns leramir.viewer
-  (:require [dali.syntax :as dali]
-            [dali.io :as io]
-            [leramir.era :as l]
+  (:require [leramir.era :as l]
             [nextjournal.clerk :as clerk]
             [leramir.types.timed-value :as tv]
             [leramir.protocols.pitch :as pitch]
