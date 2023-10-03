@@ -402,7 +402,7 @@
     start 
     duration)))
 
-(defn detect-circular-dependency? [path-value-map] ;; todo rewrite me : (
+#_(defn detect-circular-dependency? [path-value-map] ;; todo rewrite me : (
   (let [visited (atom #{})
         in-progress (atom #{})
         cycle (atom false)]
