@@ -4,6 +4,42 @@
             [leramir.types.timed-value :as tv]
             [hyperfiddle.rcf :refer [tests]]))
 
+(defn era? [ast]
+  (= ::era (:type ast)))
+
+(defn values* [result ast]
+  (if (era? ast)
+    (apply concat result (map (partial values* result) (:children ast)))
+    (conj result ast)))
+
+(defn values [ast]
+  (values* [] ast))
+
+(defn value [ast] (:value ast))
+(defn end [ast] (r/+ (:start ast) (:duration ast)))
+(defn start [ast] (:start ast))
+(defn duration [ast] (:duration ast))
+(defn children [ast] (:children ast))
+(defn attrs [ast] (:percolated-attrs ast))
+
+(defn sub-path? [path-1 path-2]
+  (= path-1 (vec (take (count path-1) path-2))))
+
+(defn up [ast path]
+  (when (> (count path) 0)
+    (:path (get-in ast (leramir.ast/ast-path (pop path))))))
+
+(defn down [ast path]
+  (:path (get-in ast (leramir.ast/ast-path (conj path 0)))))
+
+(defn left [ast path]
+  (when (and (not-empty path) (> (peek path) 0))
+    (:path (get-in ast (leramir.ast/ast-path (conj (pop path) (dec (peek path))))))))
+
+(defn right [ast path]
+  (when (not-empty path)
+    (:path (get-in ast (leramir.ast/ast-path (conj (pop path) (inc (peek path))))))))
+
 (defn scale [whole attrs]
   (if-let [scale (:scale attrs)]
     (do (assert (r/rational? scale))
@@ -134,11 +170,11 @@
                                                         [[] start' r/zero]
                                                         (:children ast)))]
                                          (merge ast {:bounds bounds :children children})))]
-            (case (:effective-tag ast) 
-              :heap 
+            (case (:effective-tag ast)
+              :heap
               ;; start start
               ;; duration duration
-              (accumulate-durations 
+              (accumulate-durations
                ast
                (constantly duration')
                (constantly start'))
@@ -162,20 +198,20 @@
                             duration'))
                r/+)))
     ::value (assoc ast' :duration duration :start start)))
-  
+
 (defn timeize [ast]
   (timeize* {:start r/zero :duration r/one} ast))
 
 (defn ast->path-value-map [ast]
   (let [->data (fn [x value-key]
-                 {(:path x) (tv/->timed-value 
-                             (:duration x) 
-                             (:start x) 
-                             (:percolated-attrs x) 
+                 {(:path x) (tv/->timed-value
+                             (:duration x)
+                             (:start x)
+                             (:percolated-attrs x)
                              (value-key x))})]
     (if (= ::era (:type ast))
-      (apply 
-       merge 
+      (apply
+       merge
        (->data ast :tag)
        (map ast->path-value-map (:children ast)))
       (->data ast :value))))
@@ -184,9 +220,9 @@
   (if-not (= (:type ast) ::era)
     (assoc ast :percolated-attrs attrs)
     (let [new-attrs (merge-attrs (:attrs ast) attrs (:path ast))]
-      (assoc 
-       ast 
-       :percolated-attrs 
+      (assoc
+       ast
+       :percolated-attrs
        new-attrs
        :children
        (mapv (partial percolate-attrs* new-attrs) (:children ast))))))
@@ -240,36 +276,36 @@
 
 (defn era->path-value-map-via-ast [era]
   {:post [(leramir.era/path-value-map? %)]}
-  (-> era 
+  (-> era
       standard-interpretation
       ast->path-value-map))
 
 (defn ->voice->end->path [ast] ;;todo memoize
   (case (:type ast)
-    ::era (apply 
+    ::era (apply
            (partial merge-with merge)
-           (map 
-            ->voice->end->path 
+           (map
+            ->voice->end->path
             (reverse (:children ast)))) ;; left to right in order to overwrite wings - does this work in every case?
-    ::value {(:voice ast) 
-             {(r/+ (:start ast) (:duration ast)) 
+    ::value {(:voice ast)
+             {(r/+ (:start ast) (:duration ast))
               (:path ast)}}))
 
 (defn distribute-wings* [ast current-node]
   (let [voice->end->path (->voice->end->path ast)]
     (case (:type current-node)
-      ::era (reduce 
-             distribute-wings* 
+      ::era (reduce
+             distribute-wings*
              ast
              (:children current-node))
       ::value (if (= :> (:value current-node))
-                (if-let [path (get-in 
-                               voice->end->path 
+                (if-let [path (get-in
+                               voice->end->path
                                [(:voice current-node) (:start current-node)])]
-                  (update-in 
-                   ast 
-                   (conj 
-                    (ast-path path) :duration) 
+                  (update-in
+                   ast
+                   (conj
+                    (ast-path path) :duration)
                    (partial r/+ (:duration current-node)))
                   ast)
                 ast))))
