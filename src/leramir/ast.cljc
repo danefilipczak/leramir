@@ -25,20 +25,23 @@
 (defn sub-path? [path-1 path-2]
   (= path-1 (vec (take (count path-1) path-2))))
 
+(defn ast-path [path]
+  (vec (interleave (repeat :children) path)))
+
 (defn up [ast path]
   (when (> (count path) 0)
-    (:path (get-in ast (leramir.ast/ast-path (pop path))))))
+    (:path (get-in ast (ast-path (pop path))))))
 
 (defn down [ast path]
-  (:path (get-in ast (leramir.ast/ast-path (conj path 0)))))
+  (:path (get-in ast (ast-path (conj path 0)))))
 
 (defn left [ast path]
   (when (and (not-empty path) (> (peek path) 0))
-    (:path (get-in ast (leramir.ast/ast-path (conj (pop path) (dec (peek path))))))))
+    (:path (get-in ast (ast-path (conj (pop path) (dec (peek path))))))))
 
 (defn right [ast path]
   (when (not-empty path)
-    (:path (get-in ast (leramir.ast/ast-path (conj (pop path) (inc (peek path))))))))
+    (:path (get-in ast (ast-path (conj (pop path) (inc (peek path))))))))
 
 (defn scale [whole attrs]
   (if-let [scale (:scale attrs)]
@@ -263,9 +266,6 @@
       timeize
       percolate-attrs
       voiceize))
-
-(defn ast-path [path]
-  (vec (interleave (repeat :children) path)))
 
 (comment
   (def ast (standard-interpretation [:heap
