@@ -20,9 +20,9 @@
                                     (fn [] (.render canvas))))))}])]))})
 
 
-(def musicxmlWithTab (slurp "src/sfsymus/leramir/notebooks/musicxmlexamples/with-tab.xml"))
+#_(def musicxmlWithTab (slurp "src/sfsymus/leramir/notebooks/musicxmlexamples/with-tab.xml"))
 
-(clerk/with-viewer OSMD-viewer
+#_(clerk/with-viewer OSMD-viewer
   musicxmlWithTab)
 
 (comment

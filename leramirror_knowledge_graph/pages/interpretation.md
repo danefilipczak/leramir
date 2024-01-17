@@ -1,0 +1,19 @@
+- an outline of interpretation steps
+	- **compute an ast from an era**
+		- **structural steps**
+			- parse eras
+				- TODO extend to ignore seams
+			- add effective tags to grafts
+			- TODO rewrite wings as seams over the relevant values (only passing through effective eras)
+			- TODO parse seams into normal values with special metadata
+		- add paths
+		- percolate attributes
+		- calculate time
+			- applies scale and shift
+	- **compute channels from ast**
+		- retrieve a seq of the values for each channel
+		- normalize set-values - they each get their own
+		- **overlaps and seams** - there is probably a clever way to do this
+			- merge overlapping values using the overlap rule
+				- a seam and a non-seam that start at the same place resolve to a non-seam
+			- apply seams

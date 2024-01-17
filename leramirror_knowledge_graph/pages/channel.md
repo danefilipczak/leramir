@@ -1,0 +1,28 @@
+- a channel represents a sub-graph of a [[score]] wherein simultaneous values have been merged.
+	- as a result, within each channel a value's presence is binary - it is either on or off at a given point in time
+	- channels have both values and signals.
+		- values are the stage
+		- signals are the dance
+			- signals of the same type on the same channel will be merged together via addition.
+				- for example, a long perlin noise walk in pitch could be merged via addition with a gamaka articulation in pitch on the same channel.
+				- a constant modulation in expression could be merged with a linear signal that modulates the amplitude of the modulation while also raising the overall level.
+	-
+- **merge modes**
+	- merging is the process by which simultaneous values are combined.
+	- The default merge mode is **overlay**. In the future we may provide implementations of alternate merge modes.
+		- [[draws/2023-12-11-12-46-57.excalidraw]]
+		-
+		- **overlay**
+			- re-articulate values, extend durations as relevant.
+		- **midi**
+			- simulates the behavior of a midi channel - a note-off event will kill all sounding notes.
+		- **merge**
+			- useful for situations where attacks are not important
+			- this can be simulated by using a [[seam]]
+				- this is a further argument for why an additional merge mode may not be necessary.
+- **evaluation order** - channels are calculated after all structural / attr based time modifications have been processed and before [[seam]]s.
+- **implementation notes**
+	- a channel is a fundamentally different data structure from the era AST, as it **does not retain structural information**.
+	- from the ast, we can compute a map of channel-name -> channel, where the channel is a sorted list of values (sorted by time->duration)
+	- from the perspective of a channel, set semantics are not relevant - sets should be converted to individual values
+	-

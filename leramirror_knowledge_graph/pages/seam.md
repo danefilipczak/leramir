@@ -1,0 +1,6 @@
+- a seam is a modifier over a single value or a set of values.
+- if that value is sounding in the current [[channel]], or just ending, it will be extended without re-articulation.
+- if that value is not sounding in the current channel, it will be rearticulated
+- [[draws/2023-12-11-13-20-54.excalidraw]]
+- **precedence**
+	- if a non-seam and a seam value begin at the same time on the same channel, the value should be both overlayed and re-articulated.

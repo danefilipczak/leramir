@@ -1,0 +1,3 @@
+- a score is a graph of eras that may contain global events such as tempo alteration
+- geilaušp
+- laušpieg
