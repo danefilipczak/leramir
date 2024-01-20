@@ -6,6 +6,7 @@
             [hyperfiddle.rcf :refer [tests]]
             [clojure.data :as data]
             [rational.core :as r]
+            [leramir.utils.math :as math]
             [meander.epsilon :as m]
             [meander.strategy.epsilon]
             [leramir.seam :as seam]
@@ -215,14 +216,8 @@
        form))
    era))
 
-(defn disjoint? [start1 end1 start2 end2]
-  (or (r/<= end1 start2)
-      (r/<= end2 start1)))
-
-(def intersecting? (complement disjoint?))
-
 (comment 
-  (intersecting?
+  (math/intersecting?
    r/one
    (r/rational 2 1)
    (r/rational 1 2)
@@ -246,7 +241,7 @@
                                       (r/< (tv/start tv) end))
                   ends-within? (and (r/> (tv/end tv) start)
                                     (r/<= (tv/end tv) end))
-                  overlap? (intersecting?
+                  overlap? (math/intersecting?
                             start
                             end
                             (tv/start tv)

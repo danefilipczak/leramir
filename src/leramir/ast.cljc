@@ -126,19 +126,11 @@
    )
  )
 
-(comment
-  (let [tree (parse [1 2 3 [:-> 5]])
-        zipper (z/zipper 
-                era?
-                children
-                reset-children 
-                tree)]
-    (-> zipper
-        z/down
-        z/right
-        z/rightmost))
-  
-  )
+(def ast->zipper
+  (partial z/zipper
+           era?
+           children
+           reset-children))
 
 (defn ast-weight [ast]
   (if (= :graft (:tag ast))
