@@ -8,6 +8,7 @@
             [rational.core :as r]
             [meander.epsilon :as m]
             [meander.strategy.epsilon]
+            [leramir.seam :as seam]
             [leramir.types.timed-value :as tv]))
 
 (defn spy [x]
@@ -71,7 +72,9 @@
  (children [:era 1 2 3 4 5]) := [1 2 3 4 5])
 
 (defn era? [form]
-  (and (vector? form) (not (map-entry? form))))
+  (and (vector? form) 
+       (not (seam/seam? form))
+       (not (map-entry? form))))
 
 (defn graft? [x]
   (and (era? x) (= (tag x) :graft)))

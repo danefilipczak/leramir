@@ -2,18 +2,15 @@
   (:require [leramir.era]
             [rational.core :as r]
             [leramir.types.timed-value :as tv]
-            [hyperfiddle.rcf :refer [tests]]))
+            [hyperfiddle.rcf :refer [tests]]
+            [clojure.zip :as z]
+            [leramir.seam :as seam]))
 
 (defn era? [ast]
   (= ::era (:type ast)))
 
-(defn values* [result ast]
-  (if (era? ast)
-    (apply concat result (map (partial values* result) (:children ast)))
-    (conj result ast)))
-
-(defn values [ast]
-  (values* [] ast))
+(defn value? [ast]
+  (= ::value (:type ast)))
 
 (defn value [ast] (:value ast))
 (defn end [ast] (r/+ (:start ast) (:duration ast)))
@@ -21,6 +18,18 @@
 (defn duration [ast] (:duration ast))
 (defn children [ast] (:children ast))
 (defn attrs [ast] (:percolated-attrs ast))
+
+(defn values* [result ast]
+  (if (era? ast)
+    (apply concat result (map (partial values* result) (children ast)))
+    (conj result ast)))
+
+(defn values [ast]
+  (values* [] ast))
+
+(defn reset-children [node children]
+  (assert (era? node))
+  (assoc node :children (vec children)))
 
 (defn sub-path? [path-1 path-2]
   (= path-1 (vec (take (count path-1) path-2))))
@@ -92,37 +101,67 @@
   (and (r/<= start1 start2)
        (r/>= end1 end2)))
 
-(defn parse [era]
-  (if (leramir.era/era? era)
-    {:type ::era
-     :tag (leramir.era/tag era)
-     :attrs (leramir.era/attrs era)
-     :children (mapv parse (leramir.era/children era))}
+(defn parse [form]
+  (cond 
+    (leramir.era/era? form)
+    (reset-children
+     {:type ::era
+      :tag (leramir.era/tag form)
+      :attrs (leramir.era/attrs form)}
+     (mapv parse (leramir.era/children form)))
+    
+    (seam/seam? form)
     {:type ::value
-     :value era}))
+     :value (seam/value form)
+     ::seam true}
+    
+    :else
+    {:type ::value
+     :value form}))
+
+(tests
+ (let [x (parse [:-> 5])] 
+   (:type x) := ::value
+   (::seam x) := true
+   )
+ )
+
+(comment
+  (let [tree (parse [1 2 3 [:-> 5]])
+        zipper (z/zipper 
+                era?
+                children
+                reset-children 
+                tree)]
+    (-> zipper
+        z/down
+        z/right
+        z/rightmost))
+  
+  )
 
 (defn ast-weight [ast]
   (if (= :graft (:tag ast))
-    (apply + (map ast-weight (:children ast)))
+    (apply + (map ast-weight (children ast)))
     1))
 
 (defn pathize* [path ast']
   (let [ast (assoc ast' :path path)]
     (case (:type ast)
-      ::era (assoc
-             ast
-             :children
-             (map-indexed
-              (fn [i c]
-                (pathize* (conj path i) c))
-              (:children ast)))
+      ::era 
+      (reset-children 
+       ast
+       (map-indexed
+        (fn [i c]
+          (pathize* (conj path i) c))
+        (children ast))) 
       ::value (assoc ast :path path))))
 
 (defn pathize [ast]
   (pathize* [] ast))
 
 (defn recur-children [ast f] ;;maybe this receives a seq of f args to apply 
-  (assoc ast :children (mapv f (:children ast))))
+  (reset-children ast (mapv f (children ast))))
 
 (defn effective-tagize* [effective-tag' {:keys [tag] :as ast}]
   (case (:type ast)
@@ -147,7 +186,7 @@
 (defn timeize* [{:keys [duration start]} {:keys [attrs] :as ast'}]
   (case (:type ast')
     ::era (let [bounds [start (r/+ start duration)]
-                total-weight (reduce + (map ast-weight (:children ast')))
+                total-weight (reduce + (map ast-weight (children ast')))
                 chain? (= (:tag ast') :chain)
                 duration' (scale duration attrs)
                 start' (shift duration' start attrs)
@@ -158,7 +197,7 @@
                                  (r/* (r/integer total-weight)))
                      :start start')
                 accumulate-durations (fn [ast duration-fn acc-fn]
-                                       (let [children (first
+                                       (let [children' (first
                                                        (reduce
                                                         (fn [[result prev-start prev-duration] curr]
                                                           (let [new-duration (duration-fn curr)
@@ -171,8 +210,10 @@
                                                              new-start
                                                              new-duration]))
                                                         [[] start' r/zero]
-                                                        (:children ast)))]
-                                         (merge ast {:bounds bounds :children children})))]
+                                                        (children ast)))]
+                                         (reset-children
+                                          (assoc ast :bounds bounds)
+                                          children')))]
             (case (:effective-tag ast)
               :heap
               ;; start start
@@ -216,19 +257,19 @@
       (apply
        merge
        (->data ast :tag)
-       (map ast->path-value-map (:children ast)))
+       (map ast->path-value-map (children ast)))
       (->data ast :value))))
 
 (defn percolate-attrs* [attrs ast]
   (if-not (= (:type ast) ::era)
     (assoc ast :percolated-attrs attrs)
     (let [new-attrs (merge-attrs (:attrs ast) attrs (:path ast))]
-      (assoc
-       ast
-       :percolated-attrs
-       new-attrs
-       :children
-       (mapv (partial percolate-attrs* new-attrs) (:children ast))))))
+      (reset-children
+       (assoc
+        ast
+        :percolated-attrs
+        new-attrs)
+       (mapv (partial percolate-attrs* new-attrs) (children ast))))))
 
 (defn percolate-attrs [ast]
   (percolate-attrs* {} ast))
@@ -243,16 +284,18 @@
                           (r/+ (:start ast) (:duration ast))))
                ;; it may be useful to do a more sophisticated version of collision detection
           new-vtp (if overflow? (conj voice-tree-path 0) voice-tree-path)
-          children (vec (map-indexed
-                         (fn [i child]
-                           (apply voiceize*
-                                  (if (= :heap (:effective-tag ast)) ;; this might be wrong for grafts. The easiest way to validate will be to build the editor.
-                                    [(conj (pop new-vtp) (+ i (peek new-vtp)))
-                                     child]
-                                    [new-vtp
-                                     child])))
-                         (:children ast)))]
-      (assoc ast :voice voice-tree-path :children children))
+          children' (vec (map-indexed
+                          (fn [i child]
+                            (apply voiceize*
+                                   (if (= :heap (:effective-tag ast)) ;; this might be wrong for grafts. The easiest way to validate will be to build the editor.
+                                     [(conj (pop new-vtp) (+ i (peek new-vtp)))
+                                      child]
+                                     [new-vtp
+                                      child])))
+                          (children ast)))]
+      (reset-children
+       (assoc ast :voice voice-tree-path)
+       children'))
     (assoc ast :voice voice-tree-path)))
 
 (defn voiceize [era]
@@ -286,7 +329,7 @@
            (partial merge-with merge)
            (map
             ->voice->end->path
-            (reverse (:children ast)))) ;; left to right in order to overwrite wings - does this work in every case?
+            (reverse (children ast)))) ;; left to right in order to overwrite wings - does this work in every case?
     ::value {(:voice ast)
              {(r/+ (:start ast) (:duration ast))
               (:path ast)}}))
@@ -297,7 +340,7 @@
       ::era (reduce
              distribute-wings*
              ast
-             (:children current-node))
+             (children current-node))
       ::value (if (= :> (:value current-node))
                 (if-let [path (get-in
                                voice->end->path
